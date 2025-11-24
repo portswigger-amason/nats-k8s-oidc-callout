@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestNewValidator_LoadsJWKS(t *testing.T) {
@@ -76,11 +77,40 @@ func TestValidateToken_ValidToken(t *testing.T) {
 }
 
 func TestValidateToken_ExpiredToken(t *testing.T) {
-	// Test for expired token detection
-	// For now, we'll skip this test since creating a properly signed but expired token
-	// requires generating a token with one of the JWKS keys, which is complex
-	// In practice, the real token will eventually expire and we can test with that
-	t.Skip("Need to create properly signed expired token for testing")
+	// RED: Test expired token by mocking time to be after token expiration
+	jwksPath := filepath.Join("..", "..", "testdata", "jwks.json")
+	tokenPath := filepath.Join("..", "..", "testdata", "token.jwt")
+
+	tokenBytes, err := os.ReadFile(tokenPath)
+	if err != nil {
+		t.Fatalf("failed to read test token: %v", err)
+	}
+	tokenString := string(tokenBytes)
+
+	validator, err := NewValidator(
+		jwksPath,
+		"https://oidc.eks.eu-west-1.amazonaws.com/id/B88E7287E54DB073AC9CDC2FD1BE0969",
+		"sts.amazonaws.com",
+	)
+	if err != nil {
+		t.Fatalf("failed to create validator: %v", err)
+	}
+
+	// Mock time to be after the token expires (token expires at 1764056278 = 2034-11-24)
+	// Set time to 2035-01-01
+	futureTime := time.Unix(1767225600, 0) // 2035-01-01
+	validator.SetTimeFunc(func() time.Time {
+		return futureTime
+	})
+
+	_, err = validator.ValidateToken(tokenString)
+	if err == nil {
+		t.Fatal("expected error for expired token, got nil")
+	}
+
+	if !IsExpiredError(err) {
+		t.Errorf("expected expired error, got %v", err)
+	}
 }
 
 func TestValidateToken_InvalidSignature(t *testing.T) {

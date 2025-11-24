@@ -16,6 +16,7 @@ type Validator struct {
 	jwks     *keyfunc.JWKS
 	issuer   string
 	audience string
+	timeFunc func() time.Time // Injectable time function for testing
 }
 
 // Claims represents the validated JWT claims including Kubernetes-specific fields.
@@ -55,13 +56,19 @@ func NewValidator(jwksPath, issuer, audience string) (*Validator, error) {
 		jwks:     jwks,
 		issuer:   issuer,
 		audience: audience,
+		timeFunc: time.Now, // Default to real time
 	}, nil
+}
+
+// SetTimeFunc sets a custom time function for testing purposes.
+func (v *Validator) SetTimeFunc(fn func() time.Time) {
+	v.timeFunc = fn
 }
 
 // ValidateToken validates a JWT token and returns the extracted claims.
 func (v *Validator) ValidateToken(tokenString string) (*Claims, error) {
-	// Parse and validate the token
-	token, err := jwt.Parse(tokenString, v.jwks.Keyfunc)
+	// Parse and validate the token with custom time function
+	token, err := jwt.Parse(tokenString, v.jwks.Keyfunc, jwt.WithTimeFunc(v.timeFunc))
 	if err != nil {
 		// Check for specific error types
 		if errors.Is(err, jwt.ErrTokenExpired) {
@@ -143,13 +150,13 @@ func (v *Validator) validateStandardClaims(claims jwt.MapClaims) error {
 	if !ok {
 		return fmt.Errorf("%w: missing or invalid exp claim", ErrInvalidClaims)
 	}
-	if time.Now().Unix() > int64(exp) {
+	if v.timeFunc().Unix() > int64(exp) {
 		return ErrExpiredToken
 	}
 
 	// Validate not-before (nbf)
 	if nbf, ok := claims["nbf"].(float64); ok {
-		if time.Now().Unix() < int64(nbf) {
+		if v.timeFunc().Unix() < int64(nbf) {
 			return fmt.Errorf("%w: token not yet valid", ErrInvalidClaims)
 		}
 	}
@@ -157,7 +164,7 @@ func (v *Validator) validateStandardClaims(claims jwt.MapClaims) error {
 	// Validate issued-at (iat)
 	if iat, ok := claims["iat"].(float64); ok {
 		// Make sure issued-at is not in the future (with 1 minute tolerance)
-		if time.Now().Unix()+60 < int64(iat) {
+		if v.timeFunc().Unix()+60 < int64(iat) {
 			return fmt.Errorf("%w: issued-at is in the future", ErrInvalidClaims)
 		}
 	}
