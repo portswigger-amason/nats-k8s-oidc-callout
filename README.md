@@ -63,17 +63,39 @@ This grants:
 - **Publish**: `foo.>`, `bar.>`, `platform.commands.*`
 - **Subscribe**: `foo.>`, `platform.events.*`, `shared.status`
 
+## Development Status
+
+### ✅ Implemented
+- CLI application with graceful shutdown
+- Environment-based configuration
+- HTTP server with health checks and Prometheus metrics
+- **JWT Validation** - Full token validation with:
+  - JWKS-based signature verification (RS256)
+  - Standard claims validation (iss, aud, exp, nbf, iat)
+  - Kubernetes-specific claims extraction
+  - Comprehensive test coverage using TDD
+
+### 🚧 In Progress
+- NATS client integration
+- Kubernetes ServiceAccount cache
+- Authorization request handler
+
+### 📋 Planned
+- NATS auth callout subscription
+- Permission building from annotations
+- End-to-end integration tests
+
 ## Architecture
 
 See [design document](docs/plans/2025-11-24-nats-k8s-auth-design.md) for detailed architecture and design decisions.
 
 ### Key Components
 
-- **NATS Client**: Subscribes to auth callout subjects
-- **JWT Validator**: Validates K8s tokens and claims
-- **ServiceAccount Cache**: Real-time watch of K8s ServiceAccounts
-- **Permission Builder**: Maps K8s identity to NATS permissions
-- **HTTP Server**: Health and metrics endpoints (port 8080)
+- **JWT Validator**: ✅ Validates K8s tokens and claims
+- **HTTP Server**: ✅ Health and metrics endpoints (port 8080)
+- **NATS Client**: 📋 Subscribes to auth callout subjects
+- **ServiceAccount Cache**: 📋 Real-time watch of K8s ServiceAccounts
+- **Permission Builder**: 📋 Maps K8s identity to NATS permissions
 
 ## Observability
 

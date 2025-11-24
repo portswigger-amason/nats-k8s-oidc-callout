@@ -23,16 +23,40 @@ This is a Go-based NATS auth callout service that validates Kubernetes service a
 - **Principle of least privilege**: Default to minimal access, explicit grants only
 - **Full JWT validation**: Signature, standard claims, K8s-specific claims
 
+## Implementation Status
+
+### ✅ Completed
+- **CLI scaffolding** (`cmd/server/main.go`) - Entry point with graceful shutdown
+- **Configuration** (`internal/config/`) - Environment variable loading with validation
+- **HTTP server** (`internal/http/`) - Health checks and Prometheus metrics on port 8080
+- **JWT validation** (`internal/jwt/`) - Full JWKS-based validation with time mocking for tests
+  - JWKS loading from file
+  - RS256 signature verification
+  - Standard claims validation (iss, aud, exp, nbf, iat)
+  - Kubernetes claims extraction (namespace, service account)
+  - Typed error handling
+  - Comprehensive test coverage with TDD approach
+
+### 🚧 In Progress
+- None currently
+
+### 📋 Pending
+- **NATS client** (`internal/nats/`) - Connection and auth callout subscription handling
+- **Kubernetes client** (`internal/k8s/`) - ServiceAccount cache with informer pattern
+- **Authorization handler** (`internal/auth/`) - Request processing and permission building
+- **Integration tests** - End-to-end testing with all components
+
 ## Project Structure
 
 ```
-cmd/server/main.go          - Entry point, wiring components
-internal/config/            - Environment variable configuration
-internal/nats/              - NATS connection & subscription handling
-internal/jwt/               - JWT validation & JWKS handling
-internal/k8s/               - ServiceAccount cache (informer pattern)
-internal/auth/              - Authorization request handler & permission builder
-internal/http/              - Health & metrics endpoints
+cmd/server/main.go          - ✅ Entry point, wiring components
+internal/config/            - ✅ Environment variable configuration
+internal/http/              - ✅ Health & metrics endpoints
+internal/jwt/               - ✅ JWT validation & JWKS handling
+internal/nats/              - 📋 NATS connection & subscription handling
+internal/k8s/               - 📋 ServiceAccount cache (informer pattern)
+internal/auth/              - 📋 Authorization request handler & permission builder
+testdata/                   - ✅ Real test data (JWKS, token, ServiceAccount)
 ```
 
 ## Dependencies
@@ -45,6 +69,24 @@ internal/http/              - Health & metrics endpoints
 - `github.com/prometheus/client_golang` - Metrics
 - `go.uber.org/zap` - Structured logging
 
+## JWT Validation Details
+
+The JWT validator (`internal/jwt/`) provides comprehensive token validation:
+
+### Features Implemented
+- **JWKS from file**: Loads and parses JWKS for signature verification
+- **Signature validation**: RS256 algorithm with key rotation support
+- **Standard claims**: Validates issuer, audience, expiration, not-before, issued-at
+- **K8s claims**: Extracts `kubernetes.io/serviceaccount/namespace` and `name`
+- **Time mocking**: Injectable time function for testing expiration logic
+- **Error types**: `ErrExpiredToken`, `ErrInvalidSignature`, `ErrInvalidClaims`, `ErrMissingK8sClaims`
+
+### Testing Approach
+- TDD (red-green-refactor) methodology
+- Real test data from EKS cluster (testdata/)
+- Time-based testing without external mocking libraries
+- 6 test cases covering success and failure scenarios
+
 ## Open Implementation Questions
 
 These details will be validated during implementation:
@@ -52,7 +94,6 @@ These details will be validated during implementation:
 1. **NATS subject pattern**: Exact subject for auth callout subscription
 2. **Request/response format**: NATS authorization JWT structure and encryption (XKey)
 3. **Auth service NKey**: How to generate and manage the service's signing key
-4. **JWKS caching**: TTL and refresh strategy for K8s public keys
 
 ## Testing Strategy
 
