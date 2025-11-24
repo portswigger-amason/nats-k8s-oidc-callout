@@ -30,32 +30,54 @@ This is a Go-based NATS auth callout service that validates Kubernetes service a
 - **Configuration** (`internal/config/`) - Environment variable loading with validation
 - **HTTP server** (`internal/http/`) - Health checks and Prometheus metrics on port 8080
 - **JWT validation** (`internal/jwt/`) - Full JWKS-based validation with time mocking for tests
-  - JWKS loading from file
+  - JWKS loading from file and HTTP URL
   - RS256 signature verification
   - Standard claims validation (iss, aud, exp, nbf, iat)
   - Kubernetes claims extraction (namespace, service account)
   - Typed error handling
   - Comprehensive test coverage with TDD approach
+  - Automatic key refresh with rate limiting
+- **Kubernetes client** (`internal/k8s/`) - ServiceAccount cache with informer pattern
+  - Thread-safe in-memory cache
+  - Cluster-wide ServiceAccount informer
+  - Annotation parsing for NATS permissions
+  - Default namespace isolation (namespace.>)
+  - Opt-in cross-namespace permissions via annotations
+  - Event handlers for ADD/UPDATE/DELETE
+  - 81.2% test coverage with TDD approach
+- **Authorization handler** (`internal/auth/`) - Request processing and permission building
+  - Clean interface design with dependency injection
+  - JWT validation integration
+  - ServiceAccount permissions lookup
+  - Generic error responses (security best practice)
+  - 100% test coverage with TDD approach
+- **NATS client** (`internal/nats/`) - Connection and auth callout subscription handling
+  - Uses `synadia-io/callout.go` library for auth callout handling
+  - Automatic NKey generation for response signing
+  - JWT token extraction from NATS connection options
+  - Bridges NATS auth requests to internal auth handler
+  - Converts auth responses to NATS user claims with permissions
+  - 29.7% test coverage with comprehensive unit tests
+  - Integration tests using testcontainers-go NATS module
+  - End-to-end auth callout flow validated with real NATS server
 
 ### 🚧 In Progress
 - None currently
 
 ### 📋 Pending
-- **NATS client** (`internal/nats/`) - Connection and auth callout subscription handling
-- **Kubernetes client** (`internal/k8s/`) - ServiceAccount cache with informer pattern
-- **Authorization handler** (`internal/auth/`) - Request processing and permission building
-- **Integration tests** - End-to-end testing with all components
+- **Main application wiring** - Connect all components in cmd/server/main.go
+- **End-to-end system test** - Full integration with all components wired together
 
 ## Project Structure
 
 ```
-cmd/server/main.go          - ✅ Entry point, wiring components
+cmd/server/main.go          - 📋 Entry point, wiring components
 internal/config/            - ✅ Environment variable configuration
 internal/http/              - ✅ Health & metrics endpoints
 internal/jwt/               - ✅ JWT validation & JWKS handling
-internal/nats/              - 📋 NATS connection & subscription handling
-internal/k8s/               - 📋 ServiceAccount cache (informer pattern)
-internal/auth/              - 📋 Authorization request handler & permission builder
+internal/k8s/               - ✅ ServiceAccount cache (informer pattern)
+internal/auth/              - ✅ Authorization handler & permission builder
+internal/nats/              - ✅ NATS connection & subscription handling
 testdata/                   - ✅ Real test data (JWKS, token, ServiceAccount)
 ```
 
@@ -99,20 +121,20 @@ The JWT validator (`internal/jwt/`) provides comprehensive token validation:
 - 6 test cases covering success and failure scenarios
 - File-based JWKS loading for tests (no HTTP dependency)
 
-## Open Implementation Questions
-
-These details will be validated during implementation:
-
-1. **NATS subject pattern**: Exact subject for auth callout subscription
-2. **Request/response format**: NATS authorization JWT structure and encryption (XKey)
-3. **Auth service NKey**: How to generate and manage the service's signing key
-
 ## Testing Strategy
 
-- **Unit tests**: Each internal package with mocks
-- **Integration tests**: Embedded NATS server + envtest for K8s
-- **Manual testing**: Deploy to kind/k3s with real NATS server
-- **Coverage target**: >80% on business logic
+- **Unit tests**: Each internal package with mocks - ✅ Completed
+- **Integration tests**: testcontainers-go NATS module - ✅ Completed
+  - Simplified setup using `github.com/testcontainers/testcontainers-go/modules/nats`
+  - Real NATS server with auth callout configuration
+  - End-to-end auth flow validation
+  - No temporary files needed (config via `strings.NewReader`)
+- **Manual testing**: Deploy to kind/k3s with real NATS server - 📋 Pending
+- **Coverage achieved**:
+  - internal/auth: 100.0%
+  - internal/k8s: 81.2%
+  - internal/jwt: 72.3%
+  - internal/nats: 29.7%
 
 ## Related Documentation
 

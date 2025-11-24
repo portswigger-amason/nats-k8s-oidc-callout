@@ -74,16 +74,27 @@ This grants:
   - Standard claims validation (iss, aud, exp, nbf, iat)
   - Kubernetes-specific claims extraction
   - Comprehensive test coverage using TDD
+- **Kubernetes ServiceAccount Cache** - Real-time watch with:
+  - Cluster-wide informer pattern
+  - Annotation-based permission parsing
+  - Default namespace isolation
+  - 81.2% test coverage
+- **Authorization Handler** - Request processing with:
+  - Clean interface design
+  - JWT validation integration
+  - Permission building from ServiceAccount annotations
+  - 100% test coverage
+- **NATS Client** - Auth callout integration with:
+  - Real-time auth request handling
+  - NKey-based response signing
+  - Integration tests with testcontainers
 
 ### 🚧 In Progress
-- NATS client integration
-- Kubernetes ServiceAccount cache
-- Authorization request handler
+- Main application wiring
 
 ### 📋 Planned
-- NATS auth callout subscription
-- Permission building from annotations
-- End-to-end integration tests
+- End-to-end system tests with all components
+- Deployment manifests and Helm chart
 
 ## Architecture
 
@@ -93,9 +104,9 @@ See [design document](docs/plans/2025-11-24-nats-k8s-auth-design.md) for detaile
 
 - **JWT Validator**: ✅ Validates K8s tokens and claims
 - **HTTP Server**: ✅ Health and metrics endpoints (port 8080)
-- **NATS Client**: 📋 Subscribes to auth callout subjects
-- **ServiceAccount Cache**: 📋 Real-time watch of K8s ServiceAccounts
-- **Permission Builder**: 📋 Maps K8s identity to NATS permissions
+- **NATS Client**: ✅ Subscribes to auth callout subjects and handles requests
+- **ServiceAccount Cache**: ✅ Real-time watch of K8s ServiceAccounts with informer pattern
+- **Authorization Handler**: ✅ Maps K8s identity to NATS permissions
 
 ## Observability
 
@@ -142,3 +153,54 @@ export JWKS_URL=https://kubernetes.default.svc/openid/v1/jwks
 ## License
 
 See [LICENSE](LICENSE) file.
+
+## Testing
+
+### Running Tests
+
+**Unit Tests** (fast, no external dependencies):
+```bash
+make test
+# or
+go test ./...
+```
+
+**Integration Tests** (requires Docker):
+```bash
+make test-integration
+# or
+go test -tags=integration -v ./internal/nats/
+```
+
+**All Tests**:
+```bash
+make test-all
+```
+
+**Coverage Report**:
+```bash
+make coverage
+```
+
+### Test Coverage
+
+- `internal/auth`: **100.0%** - Authorization handler
+- `internal/k8s`: **81.2%** - Kubernetes ServiceAccount cache
+- `internal/jwt`: **72.3%** - JWT validation with JWKS
+- `internal/nats`: **29.7%** - NATS auth callout client
+
+### Test Organization
+
+- **Unit tests**: Fast, no external dependencies, run by default
+- **Integration tests**: Use testcontainers-go NATS module for real NATS server with auth callout
+- **Build tags**: Integration tests use `-tags=integration` to avoid requiring Docker for unit tests
+
+### Integration Test Features
+
+The NATS integration tests (`internal/nats/integration_test.go`) validate:
+- Real NATS server with auth callout enabled
+- Auth service connection and subscription
+- Authorization request processing
+- JWT extraction and validation flow
+- Simplified setup using `github.com/testcontainers/testcontainers-go/modules/nats`
+
