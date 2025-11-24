@@ -60,18 +60,32 @@ This is a Go-based NATS auth callout service that validates Kubernetes service a
   - 29.7% test coverage with comprehensive unit tests
   - Integration tests using testcontainers-go NATS module
   - End-to-end auth callout flow validated with real NATS server
+- **Main application** (`cmd/server/main.go`) - Application wiring and startup
+  - Configuration loading and logger initialization
+  - JWT validator setup with JWKS URL
+  - Kubernetes client with informer factory
+  - ServiceAccount cache initialization and sync
+  - Auth handler wiring
+  - NATS client connection and auth callout service
+  - HTTP server with health and metrics endpoints
+  - Graceful shutdown handling
+  - Only pending: Health check implementations (see Pending section)
 
 ### 🚧 In Progress
 - None currently
 
-### 📋 Pending
-- **Main application wiring** - Connect all components in cmd/server/main.go
-- **End-to-end system test** - Full integration with all components wired together
+### 📋 Pending (Design Complete)
+- **Health check methods** - Add `IsHealthy()` to NATS and K8s clients
+- **Health check wiring** - Wire up health checks in main.go (replace TODOs)
+- **E2E test** - Full integration test with testcontainers (k3s + NATS)
+  - Auth callout verification with real JWT and ServiceAccount
+  - Tests complete pub/sub permission flow
+  - See: `docs/plans/2025-11-24-main-wiring-and-e2e-test-design.md`
 
 ## Project Structure
 
 ```
-cmd/server/main.go          - 📋 Entry point, wiring components
+cmd/server/main.go          - ✅ Entry point, wiring components (health checks pending)
 internal/config/            - ✅ Environment variable configuration
 internal/http/              - ✅ Health & metrics endpoints
 internal/jwt/               - ✅ JWT validation & JWKS handling
@@ -79,6 +93,8 @@ internal/k8s/               - ✅ ServiceAccount cache (informer pattern)
 internal/auth/              - ✅ Authorization handler & permission builder
 internal/nats/              - ✅ NATS connection & subscription handling
 testdata/                   - ✅ Real test data (JWKS, token, ServiceAccount)
+e2e_test.go                 - 📋 End-to-end test (pending implementation)
+docs/plans/                 - ✅ Design documents
 ```
 
 ## Dependencies
@@ -127,9 +143,14 @@ The JWT validator (`internal/jwt/`) provides comprehensive token validation:
 - **Integration tests**: testcontainers-go NATS module - ✅ Completed
   - Simplified setup using `github.com/testcontainers/testcontainers-go/modules/nats`
   - Real NATS server with auth callout configuration
-  - End-to-end auth flow validation
+  - End-to-end auth callout flow validation
   - No temporary files needed (config via `strings.NewReader`)
-- **Manual testing**: Deploy to kind/k3s with real NATS server - 📋 Pending
+- **E2E test**: testcontainers k3s + NATS - 📋 Designed, pending implementation
+  - Auth callout verification with real ServiceAccount
+  - Tests complete JWT validation → k8s lookup → permission building → NATS auth flow
+  - Validates pub/sub permissions work correctly
+  - See: `docs/plans/2025-11-24-main-wiring-and-e2e-test-design.md`
+- **Manual testing**: Deploy to kind/k3s with real NATS server - 📋 Future
 - **Coverage achieved**:
   - internal/auth: 100.0%
   - internal/k8s: 81.2%
@@ -138,9 +159,10 @@ The JWT validator (`internal/jwt/`) provides comprehensive token validation:
 
 ## Related Documentation
 
-- Design document: `docs/plans/2025-11-24-nats-k8s-auth-design.md`
-- NATS auth callout docs: https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_callout
-- NATS auth callout example: https://natsbyexample.com/examples/auth/callout/cli
+- **Initial design**: `docs/plans/2025-11-24-nats-k8s-auth-design.md`
+- **Wiring & E2E test design**: `docs/plans/2025-11-24-main-wiring-and-e2e-test-design.md`
+- **NATS auth callout docs**: https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_callout
+- **NATS auth callout example**: https://natsbyexample.com/examples/auth/callout/cli
 
 ## Development Guidelines
 
