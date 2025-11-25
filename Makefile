@@ -1,6 +1,18 @@
-.PHONY: test test-unit test-integration test-e2e test-all coverage clean
+# Variables
+BINARY_NAME := nats-k8s-oidc-callout
+OUT_DIR := out
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS := -w -s -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 
-# Run unit tests (default)
+.PHONY: test test-unit test-integration test-e2e test-all coverage clean
+.PHONY: build build-all build-amd64 build-arm64 docker-build docker-push version help
+
+# Default target
+all: build-all
+
+# Run unit tests (default test target)
 test: test-unit
 
 # Run unit tests only (no integration tests)
@@ -33,9 +45,102 @@ coverage:
 test-verbose:
 	go test -v ./...
 
-# Clean test cache
+# Build targets
+# ============================================================
+
+# Build for current architecture
+build:
+	@echo "Building for current architecture..."
+	@mkdir -p $(OUT_DIR)
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY_NAME) ./cmd/server
+
+# Build for all architectures
+build-all: build-amd64 build-arm64
+	@echo "All binaries built successfully in $(OUT_DIR)/"
+
+# Build for amd64
+build-amd64:
+	@echo "Building for linux/amd64..."
+	@mkdir -p $(OUT_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+		-ldflags="$(LDFLAGS)" \
+		-o $(OUT_DIR)/$(BINARY_NAME)-linux-amd64 \
+		./cmd/server
+
+# Build for arm64
+build-arm64:
+	@echo "Building for linux/arm64..."
+	@mkdir -p $(OUT_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+		-ldflags="$(LDFLAGS)" \
+		-o $(OUT_DIR)/$(BINARY_NAME)-linux-arm64 \
+		./cmd/server
+
+# Docker targets
+# ============================================================
+
+# Build Docker image for local testing
+docker-build: build-all
+	@echo "Building Docker image..."
+	docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		-t $(BINARY_NAME):$(VERSION) \
+		-t $(BINARY_NAME):latest \
+		--load \
+		.
+
+# Build and push multi-arch Docker image
+docker-push: build-all
+	@echo "Building and pushing multi-arch Docker image..."
+	docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		-t $(BINARY_NAME):$(VERSION) \
+		-t $(BINARY_NAME):latest \
+		--push \
+		.
+
+# Utility targets
+# ============================================================
+
+# Display version information
+version:
+	@echo "Version:    $(VERSION)"
+	@echo "Commit:     $(COMMIT)"
+	@echo "Build Date: $(BUILD_DATE)"
+
+# Help message
+help:
+	@echo "Available targets:"
+	@echo ""
+	@echo "Build targets:"
+	@echo "  all           - Build binaries for all architectures (default)"
+	@echo "  build         - Build binary for current architecture"
+	@echo "  build-all     - Build binaries for amd64 and arm64"
+	@echo "  build-amd64   - Build binary for linux/amd64"
+	@echo "  build-arm64   - Build binary for linux/arm64"
+	@echo ""
+	@echo "Docker targets:"
+	@echo "  docker-build  - Build multi-arch Docker image for local use"
+	@echo "  docker-push   - Build and push multi-arch Docker image"
+	@echo ""
+	@echo "Test targets:"
+	@echo "  test          - Run unit tests (default test)"
+	@echo "  test-unit     - Run unit tests only"
+	@echo "  test-integration - Run integration tests (requires Docker)"
+	@echo "  test-e2e      - Run E2E tests (requires Docker)"
+	@echo "  test-all      - Run all tests"
+	@echo "  coverage      - Run tests with coverage"
+	@echo ""
+	@echo "Utility targets:"
+	@echo "  version       - Display version information"
+	@echo "  clean         - Clean test cache and build artifacts"
+	@echo "  help          - Display this help message"
+
+# Clean test cache and build artifacts
 clean:
+	@echo "Cleaning test cache and build artifacts..."
 	go clean -testcache
+	rm -rf $(OUT_DIR)
 
 # Run tests in short mode (skip slow tests)
 test-short:

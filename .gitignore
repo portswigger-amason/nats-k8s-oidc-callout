@@ -8,8 +8,14 @@
 *.so
 *.dylib
 
-# Application binary
+# Application binaries
 nats-k8s-auth
+nats-k8s-oidc-callout
+nats-k8s-oidc-callout-*
+server
+
+# Build output directory
+out/
 
 # Test binary, built with `go test -c`
 *.test

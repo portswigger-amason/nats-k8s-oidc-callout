@@ -1,0 +1,54 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README*
+LICENSE
+CLAUDE.md
+
+# Go build artifacts (except our pre-built binaries)
+*.o
+*.a
+*.so
+*.exe
+*.test
+*.out
+coverage.out
+vendor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test files
+*_test.go
+testdata/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Build artifacts (keep only the linux binaries we need)
+server
+nats-k8s-oidc-callout
+!nats-k8s-oidc-callout-linux-*
+
+# Makefile and scripts
+Makefile
+*.sh
+
+# E2E tests
+e2e_test.go
+
+# Go workspace
+go.work
+go.work.sum
