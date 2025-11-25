@@ -28,67 +28,65 @@ The `cmd/server/main.go` is mostly complete with:
 
 ## Design Part 1: Health Check Implementation
 
-### Approach
+### Approach (REVISED)
 
-Add `IsHealthy()` methods to the NATS Client and K8s Client packages. The main.go will call these methods in the health check closures.
+**Decision: Keep health checks simple - do NOT check upstream services.**
 
-### NATS Client Health Check
+Health checks should indicate if the service itself is healthy, not if upstream dependencies are available. Checking upstream services (NATS, K8s API) can cause unnecessary pod restarts when those services have transient issues.
 
-**File:** `internal/nats/client.go`
+### Implementation
 
-```go
-// IsHealthy returns true if connected to NATS
-func (c *Client) IsHealthy() bool {
-    return c.conn != nil && c.conn.IsConnected()
-}
-```
+**No changes needed** - Keep the existing placeholder functions that return `true`.
 
-**Implementation details:**
-- Uses existing `conn.IsConnected()` from nats.go library
-- Simple nil check for safety
-- Returns false if connection is nil or disconnected
-
-### K8s Client Health Check
-
-**File:** `internal/k8s/client.go`
-
-```go
-// IsHealthy returns true if the informer cache has synced
-func (c *Client) IsHealthy() bool {
-    return c.informer.HasSynced()
-}
-```
-
-**Implementation details:**
-- Uses existing `informer.HasSynced()` from client-go
-- Confirms the ServiceAccount cache is ready
-- Returns false if informer hasn't completed initial sync
-
-### Main.go Wiring
-
-Replace the TODO placeholders (lines 109-122) with:
-
+The current implementation in `cmd/server/main.go` (lines 109-122):
 ```go
 httpSrv := httpserver.New(cfg.Port, logger, httpserver.HealthChecks{
-    NatsConnected:    func() bool { return natsClient.IsHealthy() },
-    K8sConnected:     func() bool { return k8sClient.IsHealthy() },
-    CacheInitialized: func() bool { return k8sClient.IsHealthy() },
+    NatsConnected: func() bool {
+        // TODO: Add proper health check
+        return true
+    },
+    K8sConnected: func() bool {
+        // TODO: Add proper health check
+        return true
+    },
+    CacheInitialized: func() bool {
+        // TODO: Add proper health check
+        return true
+    },
 })
 ```
 
-**Note:** We use the same check for `K8sConnected` and `CacheInitialized` since they're both based on informer sync status. This is appropriate because the informer handles both connectivity and cache synchronization.
+**This is the correct approach:**
+- `/health` returns healthy if the HTTP server is responding
+- Does not check NATS connection status (upstream dependency)
+- Does not check K8s API availability (upstream dependency)
+- Simple and follows Kubernetes best practices for liveness probes
+
+### Rationale
+
+**Why not check upstream services:**
+- ✅ Prevents unnecessary pod restarts due to transient upstream issues
+- ✅ The service can still be "alive" even if NATS is temporarily down
+- ✅ Connection errors are already logged and tracked via metrics
+- ✅ Follows the principle: liveness = "is the process healthy", not "are dependencies available"
+
+**If we need readiness checks:**
+- Could add `/ready` endpoint in the future for readiness probes
+- Readiness could check if initial cache sync completed
+- But for now, simple health check is sufficient
 
 ### Trade-offs
 
-**Chosen approach:** Add methods to each component
-- ✅ Encapsulates health logic with the component
-- ✅ Cleaner main.go, just calls methods
-- ✅ More maintainable for production use
-- ⚠️ Requires modifying internal packages (minimal change)
+**Chosen approach:** Simple health check (always return true)
+- ✅ No unnecessary pod restarts
+- ✅ Follows best practices
+- ✅ No code changes needed
+- ✅ Service handles transient upstream failures gracefully
 
-**Alternative considered:** Keep health check logic in main.go using closures
-- ❌ Health logic separated from component code
-- ✅ No changes to internal packages
+**Alternative considered:** Check upstream service status
+- ❌ Causes pod restarts when NATS/K8s have issues
+- ❌ Doesn't help - restarting the pod won't fix upstream issues
+- ❌ Masks the real problem (upstream service down)
 
 ## Design Part 2: E2E Test Architecture
 
@@ -326,9 +324,9 @@ test-e2e:
 ## Success Criteria
 
 ### Health Checks
-- ✅ NATS health check returns true when connected, false when disconnected
-- ✅ K8s health check returns true when cache synced, false otherwise
-- ✅ `/health` endpoint reflects actual component status
+- ✅ `/health` endpoint returns 200 OK when service is running
+- ✅ Health check does not check upstream dependencies (correct behavior)
+- ✅ No code changes needed - existing placeholders are correct
 
 ### E2E Test
 - ✅ Test successfully starts k3s and NATS containers
@@ -342,14 +340,12 @@ test-e2e:
 
 ## Implementation Order
 
-1. Add `IsHealthy()` method to `internal/nats/client.go`
-2. Add `IsHealthy()` method to `internal/k8s/client.go`
-3. Update health check wiring in `cmd/server/main.go`
-4. Create `e2e_test.go` with test structure
-5. Implement test helper functions (JWT generation, k8s client setup, etc.)
-6. Implement main E2E test function
-7. Add `test-e2e` target to Makefile
-8. Run and validate E2E test
+1. ~~Health checks~~ - No changes needed, existing implementation is correct
+2. Create `e2e_test.go` with test structure
+3. Implement test helper functions (JWT generation, k8s client setup, etc.)
+4. Implement main E2E test function
+5. Add `test-e2e` target to Makefile
+6. Run and validate E2E test
 
 ## Future Enhancements
 

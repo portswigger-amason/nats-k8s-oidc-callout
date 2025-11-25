@@ -67,27 +67,27 @@ This is a Go-based NATS auth callout service that validates Kubernetes service a
   - ServiceAccount cache initialization and sync
   - Auth handler wiring
   - NATS client connection and auth callout service
-  - HTTP server with health and metrics endpoints
+  - HTTP server with health and metrics endpoints (simple liveness check)
   - Graceful shutdown handling
-  - Only pending: Health check implementations (see Pending section)
+  - **Complete** - No changes needed, health checks correctly don't check upstream services
 
 ### 🚧 In Progress
 - None currently
 
 ### 📋 Pending (Design Complete)
-- **Health check methods** - Add `IsHealthy()` to NATS and K8s clients
-- **Health check wiring** - Wire up health checks in main.go (replace TODOs)
 - **E2E test** - Full integration test with testcontainers (k3s + NATS)
   - Auth callout verification with real JWT and ServiceAccount
   - Tests complete pub/sub permission flow
   - See: `docs/plans/2025-11-24-main-wiring-and-e2e-test-design.md`
 
+**Note:** Health checks are complete - existing placeholders are correct (simple liveness check without upstream dependency checks)
+
 ## Project Structure
 
 ```
-cmd/server/main.go          - ✅ Entry point, wiring components (health checks pending)
+cmd/server/main.go          - ✅ Entry point, complete application wiring
 internal/config/            - ✅ Environment variable configuration
-internal/http/              - ✅ Health & metrics endpoints
+internal/http/              - ✅ Health & metrics endpoints (simple liveness)
 internal/jwt/               - ✅ JWT validation & JWKS handling
 internal/k8s/               - ✅ ServiceAccount cache (informer pattern)
 internal/auth/              - ✅ Authorization handler & permission builder
