@@ -35,8 +35,8 @@ func TestCache_Get(t *testing.T) {
 				}
 				c.upsert(sa)
 			},
-			wantPubPerms: []string{"_INBOX.>", "hakawai.>", "platform.events.>", "shared.metrics.*"},
-			wantSubPerms: []string{"_INBOX.>", "hakawai.>", "platform.commands.*", "shared.status"},
+			wantPubPerms: []string{"hakawai.>", "platform.events.>", "shared.metrics.*"},
+			wantSubPerms: []string{"hakawai.>", "platform.commands.*", "shared.status"},
 			wantFound:    true,
 		},
 		{
@@ -55,8 +55,8 @@ func TestCache_Get(t *testing.T) {
 				}
 				c.upsert(sa)
 			},
-			wantPubPerms: []string{"_INBOX.>", "default.>", "external.>"},
-			wantSubPerms: []string{"_INBOX.>", "default.>"},
+			wantPubPerms: []string{"default.>", "external.>"},
+			wantSubPerms: []string{"default.>"},
 			wantFound:    true,
 		},
 		{
@@ -75,8 +75,8 @@ func TestCache_Get(t *testing.T) {
 				}
 				c.upsert(sa)
 			},
-			wantPubPerms: []string{"_INBOX.>", "production.>"},
-			wantSubPerms: []string{"_INBOX.>", "production.>"},
+			wantPubPerms: []string{"production.>"},
+			wantSubPerms: []string{"production.>"},
 			wantFound:    true,
 		},
 		{
@@ -134,7 +134,7 @@ func TestCache_Upsert(t *testing.T) {
 	if !found {
 		t.Fatal("Expected ServiceAccount to be in cache after upsert")
 	}
-	if !equalStringSlices(pubPerms, []string{"_INBOX.>", "default.>", "initial.>"}) {
+	if !equalStringSlices(pubPerms, []string{"default.>", "initial.>"}) {
 		t.Errorf("Initial pubPerms = %v, want [_INBOX.> default.> initial.>]", pubPerms)
 	}
 
@@ -154,7 +154,7 @@ func TestCache_Upsert(t *testing.T) {
 	if !found {
 		t.Fatal("Expected ServiceAccount to still be in cache after update")
 	}
-	if !equalStringSlices(pubPerms, []string{"_INBOX.>", "default.>", "updated.>", "another.*"}) {
+	if !equalStringSlices(pubPerms, []string{"default.>", "updated.>", "another.*"}) {
 		t.Errorf("Updated pubPerms = %v, want [_INBOX.> default.> updated.> another.*]", pubPerms)
 	}
 }

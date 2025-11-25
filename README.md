@@ -60,10 +60,15 @@ metadata:
 ```
 
 This grants:
-- **Publish**: `_INBOX.>`, `foo.>`, `bar.>`, `platform.commands.*`
-- **Subscribe**: `_INBOX.>`, `foo.>`, `platform.events.*`, `shared.status`
+- **Publish**: `foo.>`, `bar.>`, `platform.commands.*`
+- **Subscribe**: `foo.>`, `platform.events.*`, `shared.status`
+- **Request-Reply**: Enabled via `allow_responses: true` (MaxMsgs: 1, no time limit)
 
-Note: `_INBOX.>` is included by default in both publish and subscribe permissions to enable NATS request-reply patterns.
+**Security Note:** The service uses NATS `allow_responses: true` permission instead of granting wildcard `_INBOX.>` access. This is more secure because:
+- Clients can only publish to reply subjects during active request handling
+- No ability to eavesdrop on other clients' reply traffic
+- Response publishing expires immediately after sending (MaxMsgs: 1)
+- Follows NATS security best practices for request-reply patterns
 
 ## Development Status
 

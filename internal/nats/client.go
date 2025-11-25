@@ -109,6 +109,16 @@ func (c *Client) Start(ctx context.Context) error {
 
 		uc.Pub.Allow.Add(authResp.PublishPermissions...)
 		uc.Sub.Allow.Add(authResp.SubscribePermissions...)
+
+		// Enable response permissions (equivalent to allow_responses: true)
+		// This allows responders to publish to reply subjects during request handling
+		// MaxMsgs: 1 = allow one response per request (NATS default)
+		// Expires: 0 = no time limit
+		uc.Resp = &jwt.ResponsePermission{
+			MaxMsgs: 1,
+			Expires: 0,
+		}
+
 		uc.Expires = time.Now().Add(DefaultTokenExpiry).Unix()
 
 		c.logger.Debug("built user claims",

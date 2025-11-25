@@ -76,10 +76,17 @@ metadata:
 
 **Resulting Permissions:**
 
-- **Publish**: `_INBOX.>`, `my-namespace.>`, `platform.events.>`, `shared.commands.*`
-- **Subscribe**: `_INBOX.>`, `my-namespace.>`, `platform.notifications.*`, `shared.status`
+- **Publish**: `my-namespace.>`, `platform.events.>`, `shared.commands.*`
+- **Subscribe**: `my-namespace.>`, `platform.notifications.*`, `shared.status`
+- **Request-Reply**: Enabled via `allow_responses: true` (MaxMsgs: 1, no time limit)
 
-**Note:** `_INBOX.>` is automatically included in both publish and subscribe permissions to enable NATS request-reply patterns.
+**Security Note:** The service uses NATS `allow_responses: true` permission instead of granting wildcard `_INBOX.>` access. This provides the most secure approach for request-reply patterns:
+- **Granular Control**: Clients can only publish to reply subjects during active request handling
+- **No Eavesdropping**: No ability to subscribe to or publish to other clients' reply traffic
+- **Automatic Expiration**: Response publishing permission expires immediately after sending (MaxMsgs: 1)
+- **NATS Best Practice**: Follows official NATS security recommendations for request-reply patterns
+
+This means your application can use `nc.Request()` and handle reply messages normally, but cannot abuse `_INBOX.>` wildcards to access other clients' replies.
 
 ## Client Implementation
 

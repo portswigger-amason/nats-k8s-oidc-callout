@@ -58,8 +58,8 @@ func TestClient_Informer(t *testing.T) {
 		if !found {
 			t.Fatal("Expected ServiceAccount to be in cache after ADD event")
 		}
-		if len(pubPerms) != 3 || pubPerms[0] != "_INBOX.>" || pubPerms[1] != "default.>" || pubPerms[2] != "test.>" {
-			t.Errorf("Got pubPerms = %v, want [_INBOX.> default.> test.>]", pubPerms)
+		if len(pubPerms) != 2 || pubPerms[0] != "default.>" || pubPerms[1] != "test.>" {
+			t.Errorf("Got pubPerms = %v, want [default.> test.>]", pubPerms)
 		}
 	})
 
@@ -89,8 +89,8 @@ func TestClient_Informer(t *testing.T) {
 		if !found {
 			t.Fatal("Expected ServiceAccount to still be in cache after UPDATE event")
 		}
-		if len(pubPerms) != 4 || pubPerms[0] != "_INBOX.>" || pubPerms[1] != "default.>" || pubPerms[2] != "updated.>" || pubPerms[3] != "another.*" {
-			t.Errorf("Got pubPerms = %v, want [_INBOX.> default.> updated.> another.*]", pubPerms)
+		if len(pubPerms) != 3 || pubPerms[0] != "default.>" || pubPerms[1] != "updated.>" || pubPerms[2] != "another.*" {
+			t.Errorf("Got pubPerms = %v, want [default.> updated.> another.*]", pubPerms)
 		}
 	})
 
@@ -138,8 +138,8 @@ func TestClient_GetPermissions(t *testing.T) {
 		t.Fatal("Expected to find ServiceAccount")
 	}
 
-	expectedPub := []string{"_INBOX.>", "default.>", "test.>"}
-	expectedSub := []string{"_INBOX.>", "default.>", "sub.*"}
+	expectedPub := []string{"default.>", "test.>"}
+	expectedSub := []string{"default.>", "sub.*"}
 
 	if !equalStringSlices(pubPerms, expectedPub) {
 		t.Errorf("pubPerms = %v, want %v", pubPerms, expectedPub)

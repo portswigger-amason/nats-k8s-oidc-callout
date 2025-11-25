@@ -73,9 +73,10 @@ func buildPermissions(sa *corev1.ServiceAccount) *Permissions {
 
 	// Default: namespace scope (always included)
 	defaultSubject := fmt.Sprintf("%s.>", sa.Namespace)
-	// Both Publish and Subscribe include _INBOX.> for request-reply patterns AND namespace scope
-	perms.Publish = []string{"_INBOX.>", defaultSubject}
-	perms.Subscribe = []string{"_INBOX.>", defaultSubject}
+	// Publish: Only namespace scope (response publishing handled via Resp field in auth callout)
+	perms.Publish = []string{defaultSubject}
+	// Subscribe: Only namespace scope (_INBOX.> not needed, NATS handles reply subscriptions internally)
+	perms.Subscribe = []string{defaultSubject}
 
 	// Add additional subjects from annotations
 	if pubAnnotation, ok := sa.Annotations[AnnotationAllowedPubSubjects]; ok {
