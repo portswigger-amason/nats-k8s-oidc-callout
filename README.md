@@ -60,8 +60,10 @@ metadata:
 ```
 
 This grants:
-- **Publish**: `foo.>`, `bar.>`, `platform.commands.*`
-- **Subscribe**: `foo.>`, `platform.events.*`, `shared.status`
+- **Publish**: `foo.>`, `_INBOX.>`, `bar.>`, `platform.commands.*`
+- **Subscribe**: `foo.>`, `_INBOX.>`, `platform.events.*`, `shared.status`
+
+Note: `_INBOX.>` is included by default in both publish and subscribe permissions to enable NATS request-reply patterns.
 
 ## Development Status
 
@@ -105,7 +107,10 @@ This grants:
 
 ## Documentation
 
-- **[Client Usage Guide](docs/CLIENT_USAGE.md)** - Complete guide for configuring and using NATS authentication from your applications
+- **[Getting Started Guide](docs/GETTING_STARTED.md)** - Complete walkthrough for newcomers explaining how everything works
+- **[Client Usage Guide](docs/CLIENT_USAGE.md)** - How to configure and use NATS authentication from your applications (Go and Java examples)
+- **[Deployment Guide](docs/DEPLOY.md)** - How to deploy the auth service to Kubernetes
+- **[Build Guide](docs/BUILD.md)** - How to build and package the application
 - **[Design Document](docs/plans/2025-11-24-nats-k8s-auth-design.md)** - Detailed architecture and design decisions
 
 ## Architecture
