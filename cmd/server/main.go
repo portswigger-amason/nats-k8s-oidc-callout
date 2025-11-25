@@ -8,8 +8,16 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
+	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/auth"
 	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/config"
 	httpserver "github.com/portswigger-tim/nats-k8s-oidc-callout/internal/http"
+	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/jwt"
+	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/k8s"
+	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/nats"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -38,14 +46,79 @@ func run() error {
 	logger.Info("starting nats-k8s-oidc-callout",
 		zap.String("port", fmt.Sprintf("%d", cfg.Port)),
 		zap.String("log_level", cfg.LogLevel),
+		zap.String("nats_url", cfg.NatsURL),
+		zap.String("jwks_url", cfg.JWKSURL),
 	)
+
+	// Initialize JWT validator
+	logger.Info("initializing JWT validator", zap.String("jwks_url", cfg.JWKSURL))
+	jwtValidator, err := jwt.NewValidatorFromURL(cfg.JWKSURL)
+	if err != nil {
+		return fmt.Errorf("failed to create JWT validator: %w", err)
+	}
+
+	// Initialize Kubernetes client
+	logger.Info("initializing Kubernetes client")
+	k8sConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(k8sConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes clientset: %w", err)
+	}
+
+	// Create informer factory
+	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
+
+	// Create K8s client with ServiceAccount cache
+	k8sClient := k8s.NewClient(informerFactory)
+
+	// Start informers
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	informerFactory.Start(stopCh)
+
+	// Wait for caches to sync
+	logger.Info("waiting for Kubernetes caches to sync")
+	informerFactory.WaitForCacheSync(stopCh)
+	logger.Info("Kubernetes caches synced")
+
+	// Initialize authorization handler
+	authHandler := auth.NewHandler(jwtValidator, k8sClient)
+
+	// Initialize NATS client
+	logger.Info("initializing NATS client", zap.String("url", cfg.NatsURL))
+	natsClient, err := nats.NewClient(cfg.NatsURL, authHandler)
+	if err != nil {
+		return fmt.Errorf("failed to create NATS client: %w", err)
+	}
+
+	// Start NATS auth callout service
+	ctx := context.Background()
+	if err := natsClient.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start NATS client: %w", err)
+	}
+	defer natsClient.Shutdown(ctx)
+
+	logger.Info("NATS auth callout service started successfully")
 
 	// Initialize HTTP server with health checks
 	httpSrv := httpserver.New(cfg.Port, logger, httpserver.HealthChecks{
-		// Health check functions will be set when we implement NATS and K8s clients
-		NatsConnected:    nil,
-		K8sConnected:     nil,
-		CacheInitialized: nil,
+		NatsConnected: func() bool {
+			// TODO: Add proper health check
+			return true
+		},
+		K8sConnected: func() bool {
+			// TODO: Add proper health check
+			return true
+		},
+		CacheInitialized: func() bool {
+			// TODO: Add proper health check
+			return true
+		},
 	})
 
 	// Start HTTP server in a goroutine
@@ -53,6 +126,8 @@ func run() error {
 	go func() {
 		serverErrors <- httpSrv.Start()
 	}()
+
+	logger.Info("all services started successfully")
 
 	// Wait for interrupt signal or server error
 	shutdown := make(chan os.Signal, 1)
@@ -68,6 +143,13 @@ func run() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
+		// Shutdown in reverse order
+		logger.Info("shutting down NATS client")
+		if err := natsClient.Shutdown(ctx); err != nil {
+			logger.Error("failed to shutdown NATS client", zap.Error(err))
+		}
+
+		logger.Info("shutting down HTTP server")
 		if err := httpSrv.Shutdown(ctx); err != nil {
 			logger.Error("failed to shutdown HTTP server gracefully", zap.Error(err))
 			return err
