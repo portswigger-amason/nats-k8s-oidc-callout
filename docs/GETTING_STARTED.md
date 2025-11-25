@@ -97,8 +97,10 @@ metadata:
 ```
 
 Result:
-- Publish: `_INBOX.>`, `_INBOX_production_my-service.>`, `production.>`, `orders.>`, `inventory.check`
+- Publish: `production.>`, `orders.>`, `inventory.check`
 - Subscribe: `_INBOX.>`, `_INBOX_production_my-service.>`, `production.>`, `orders.responses.*`
+
+**Note:** Inbox patterns (`_INBOX*`) are automatic for Subscribe only. Request-reply responses use `allow_responses: true` (not explicit Publish permissions).
 
 ## Key Concepts
 
