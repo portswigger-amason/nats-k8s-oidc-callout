@@ -35,8 +35,8 @@ func TestCache_Get(t *testing.T) {
 				}
 				c.upsert(sa)
 			},
-			wantPubPerms: []string{"hakawai.>", "platform.events.>", "shared.metrics.*"},
-			wantSubPerms: []string{"hakawai.>", "platform.commands.*", "shared.status"},
+			wantPubPerms: []string{"hakawai.>", "_INBOX.>", "platform.events.>", "shared.metrics.*"},
+			wantSubPerms: []string{"hakawai.>", "_INBOX.>", "platform.commands.*", "shared.status"},
 			wantFound:    true,
 		},
 		{
@@ -55,8 +55,8 @@ func TestCache_Get(t *testing.T) {
 				}
 				c.upsert(sa)
 			},
-			wantPubPerms: []string{"default.>", "external.>"},
-			wantSubPerms: []string{"default.>"},
+			wantPubPerms: []string{"default.>", "_INBOX.>", "external.>"},
+			wantSubPerms: []string{"default.>", "_INBOX.>"},
 			wantFound:    true,
 		},
 		{
@@ -75,8 +75,8 @@ func TestCache_Get(t *testing.T) {
 				}
 				c.upsert(sa)
 			},
-			wantPubPerms: []string{"production.>"},
-			wantSubPerms: []string{"production.>"},
+			wantPubPerms: []string{"production.>", "_INBOX.>"},
+			wantSubPerms: []string{"production.>", "_INBOX.>"},
 			wantFound:    true,
 		},
 		{
@@ -134,8 +134,8 @@ func TestCache_Upsert(t *testing.T) {
 	if !found {
 		t.Fatal("Expected ServiceAccount to be in cache after upsert")
 	}
-	if !equalStringSlices(pubPerms, []string{"default.>", "initial.>"}) {
-		t.Errorf("Initial pubPerms = %v, want [default.> initial.>]", pubPerms)
+	if !equalStringSlices(pubPerms, []string{"default.>", "_INBOX.>", "initial.>"}) {
+		t.Errorf("Initial pubPerms = %v, want [default.> _INBOX.> initial.>]", pubPerms)
 	}
 
 	// Update with new annotations
@@ -154,8 +154,8 @@ func TestCache_Upsert(t *testing.T) {
 	if !found {
 		t.Fatal("Expected ServiceAccount to still be in cache after update")
 	}
-	if !equalStringSlices(pubPerms, []string{"default.>", "updated.>", "another.*"}) {
-		t.Errorf("Updated pubPerms = %v, want [default.> updated.> another.*]", pubPerms)
+	if !equalStringSlices(pubPerms, []string{"default.>", "_INBOX.>", "updated.>", "another.*"}) {
+		t.Errorf("Updated pubPerms = %v, want [default.> _INBOX.> updated.> another.*]", pubPerms)
 	}
 }
 
