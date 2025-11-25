@@ -97,8 +97,8 @@ metadata:
 ```
 
 Result:
-- Publish: `_INBOX.>`, `production.>`, `orders.>`, `inventory.check`
-- Subscribe: `_INBOX.>`, `production.>`, `orders.responses.*`
+- Publish: `_INBOX.>`, `_INBOX_production_my-service.>`, `production.>`, `orders.>`, `inventory.check`
+- Subscribe: `_INBOX.>`, `_INBOX_production_my-service.>`, `production.>`, `orders.responses.*`
 
 ## Key Concepts
 
