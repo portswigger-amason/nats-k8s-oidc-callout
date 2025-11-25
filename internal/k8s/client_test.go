@@ -139,7 +139,7 @@ func TestClient_GetPermissions(t *testing.T) {
 	}
 
 	expectedPub := []string{"default.>", "test.>"}
-	expectedSub := []string{"default.>", "sub.*"}
+	expectedSub := []string{"_INBOX.>", "_INBOX_default_test-sa.>", "default.>", "sub.*"}
 
 	if !equalStringSlices(pubPerms, expectedPub) {
 		t.Errorf("pubPerms = %v, want %v", pubPerms, expectedPub)

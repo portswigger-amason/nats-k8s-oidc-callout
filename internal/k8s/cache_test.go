@@ -36,7 +36,7 @@ func TestCache_Get(t *testing.T) {
 				c.upsert(sa)
 			},
 			wantPubPerms: []string{"hakawai.>", "platform.events.>", "shared.metrics.*"},
-			wantSubPerms: []string{"hakawai.>", "platform.commands.*", "shared.status"},
+			wantSubPerms: []string{"_INBOX.>", "_INBOX_hakawai_hakawai-litellm-proxy.>", "hakawai.>", "platform.commands.*", "shared.status"},
 			wantFound:    true,
 		},
 		{
@@ -56,7 +56,7 @@ func TestCache_Get(t *testing.T) {
 				c.upsert(sa)
 			},
 			wantPubPerms: []string{"default.>", "external.>"},
-			wantSubPerms: []string{"default.>"},
+			wantSubPerms: []string{"_INBOX.>", "_INBOX_default_test-sa.>", "default.>"},
 			wantFound:    true,
 		},
 		{
@@ -76,7 +76,7 @@ func TestCache_Get(t *testing.T) {
 				c.upsert(sa)
 			},
 			wantPubPerms: []string{"production.>"},
-			wantSubPerms: []string{"production.>"},
+			wantSubPerms: []string{"_INBOX.>", "_INBOX_production_minimal-sa.>", "production.>"},
 			wantFound:    true,
 		},
 		{
