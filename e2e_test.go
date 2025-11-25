@@ -667,6 +667,291 @@ authorization {
 	t.Log("  - Connection correctly rejected due to audience mismatch")
 }
 
+// TestE2E_MaxMsgsOneResponseLimit tests that the Resp permission MaxMsgs: 1 limit works
+func TestE2E_MaxMsgsOneResponseLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Step 1: Start k3s cluster
+	t.Log("Starting k3s cluster...")
+	k3sContainer, err := k3s.Run(ctx, "rancher/k3s:v1.31.3-k3s1")
+	if err != nil {
+		t.Fatalf("Failed to start k3s: %v", err)
+	}
+	defer k3sContainer.Terminate(ctx)
+
+	// Get kubeconfig
+	kubeConfigYAML, err := k3sContainer.GetKubeConfig(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get kubeconfig: %v", err)
+	}
+
+	kubeconfigFile, err := os.CreateTemp("", "kubeconfig-*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create kubeconfig file: %v", err)
+	}
+	defer os.Remove(kubeconfigFile.Name())
+
+	if _, err := kubeconfigFile.Write(kubeConfigYAML); err != nil {
+		t.Fatalf("Failed to write kubeconfig: %v", err)
+	}
+	kubeconfigFile.Close()
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigFile.Name())
+	if err != nil {
+		t.Fatalf("Failed to build config: %v", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		t.Fatalf("Failed to create clientset: %v", err)
+	}
+
+	// Step 2: Create ServiceAccount
+	t.Log("Creating ServiceAccount...")
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-maxmsgs",
+			Namespace: "default",
+			Annotations: map[string]string{
+				"nats.io/allowed-pub-subjects": "test.>",
+				"nats.io/allowed-sub-subjects": "test.>, _INBOX.>", // Need _INBOX.> to receive replies
+			},
+		},
+	}
+
+	_, err = clientset.CoreV1().ServiceAccounts("default").Create(ctx, sa, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create ServiceAccount: %v", err)
+	}
+
+	// Step 3: Start NATS server
+	t.Log("Starting NATS server...")
+	authServiceKey, _ := nkeys.CreateAccount()
+	authServicePubKey, _ := authServiceKey.PublicKey()
+
+	natsConfig := fmt.Sprintf(`
+port: 4222
+debug: true
+trace: true
+authorization {
+	users: [
+		{ user: "auth-service", password: "auth-service-pass" }
+	]
+	auth_callout {
+		issuer: %s
+		auth_users: [ "auth-service" ]
+	}
+}
+`, authServicePubKey)
+
+	natsConfigFile, err := os.CreateTemp("", "nats-config-*.conf")
+	if err != nil {
+		t.Fatalf("Failed to create NATS config: %v", err)
+	}
+	defer os.Remove(natsConfigFile.Name())
+
+	if _, err := natsConfigFile.WriteString(natsConfig); err != nil {
+		t.Fatalf("Failed to write NATS config: %v", err)
+	}
+	natsConfigFile.Close()
+
+	natsReq := testcontainers.ContainerRequest{
+		Image:        "nats:latest",
+		ExposedPorts: []string{"4222/tcp"},
+		Cmd:          []string{"-c", "/etc/nats/nats.conf"},
+		Files: []testcontainers.ContainerFile{
+			{
+				HostFilePath:      natsConfigFile.Name(),
+				ContainerFilePath: "/etc/nats/nats.conf",
+				FileMode:          0644,
+			},
+		},
+		WaitingFor: wait.ForLog("Server is ready").WithStartupTimeout(30 * time.Second),
+	}
+
+	natsContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: natsReq,
+		Started:          true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to start NATS: %v", err)
+	}
+	defer natsContainer.Terminate(ctx)
+
+	host, _ := natsContainer.Host(ctx)
+	mappedPort, _ := natsContainer.MappedPort(ctx, "4222")
+	natsURL := fmt.Sprintf("nats://%s:%s", host, mappedPort.Port())
+
+	// Step 4: Create token
+	t.Log("Creating ServiceAccount token...")
+	expirationSeconds := int64(3600)
+	tokenRequest := &authv1.TokenRequest{
+		Spec: authv1.TokenRequestSpec{
+			Audiences:         []string{"nats"},
+			ExpirationSeconds: &expirationSeconds,
+		},
+	}
+
+	tokenResult, err := clientset.CoreV1().ServiceAccounts("default").CreateToken(
+		ctx,
+		"test-maxmsgs",
+		tokenRequest,
+		metav1.CreateOptions{},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ServiceAccount token: %v", err)
+	}
+
+	realK8sToken := tokenResult.Status.Token
+
+	// Step 5: Set up auth service
+	t.Log("Starting auth service...")
+	mockValidator := &mockJWTValidator{
+		validateFunc: func(token string) (*internalJWT.Claims, error) {
+			if token != realK8sToken {
+				return nil, fmt.Errorf("token mismatch")
+			}
+			return &internalJWT.Claims{
+				Namespace:      "default",
+				ServiceAccount: "test-maxmsgs",
+			}, nil
+		},
+	}
+
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer logger.Sync()
+
+	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
+	k8sClient := internalK8s.NewClient(informerFactory)
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
+	time.Sleep(500 * time.Millisecond)
+
+	authHandler := auth.NewHandler(mockValidator, k8sClient)
+
+	authServiceURL := fmt.Sprintf("nats://auth-service:auth-service-pass@%s:%s", host, mappedPort.Port())
+	natsClient, err := internalNATS.NewClient(authServiceURL, authHandler, logger)
+	if err != nil {
+		t.Fatalf("Failed to create NATS client: %v", err)
+	}
+
+	natsClient.SetSigningKey(authServiceKey)
+
+	if err := natsClient.Start(ctx); err != nil {
+		t.Fatalf("Failed to start NATS client: %v", err)
+	}
+	defer natsClient.Shutdown(ctx)
+
+	time.Sleep(500 * time.Millisecond)
+
+	// Step 6: Connect client
+	t.Log("Connecting test client...")
+	testConn, err := natsclient.Connect(
+		natsURL,
+		natsclient.Token(realK8sToken),
+		natsclient.Timeout(5*time.Second),
+	)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer testConn.Close()
+
+	// Step 7: Test MaxMsgs: 1 limitation
+	t.Log("Test: Responder should only be able to send ONE reply (MaxMsgs: 1)")
+
+	// Create a channel to track reply attempts
+	replyAttempts := make(chan error, 2)
+
+	// Set up responder that tries to send TWO replies
+	responderSub, err := testConn.Subscribe("test.maxmsgs", func(msg *natsclient.Msg) {
+		t.Logf("Responder received request, reply inbox: %s", msg.Reply)
+
+		// First reply - should succeed
+		err := msg.Respond([]byte("first reply"))
+		replyAttempts <- err
+		if err != nil {
+			t.Logf("First reply failed (unexpected): %v", err)
+		} else {
+			t.Log("First reply sent successfully")
+		}
+
+		// Small delay to ensure first reply is processed
+		time.Sleep(100 * time.Millisecond)
+
+		// Second reply - should FAIL due to MaxMsgs: 1
+		// Try to publish directly to the reply inbox
+		err = testConn.Publish(msg.Reply, []byte("second reply - should fail"))
+		if err != nil {
+			t.Logf("Second reply failed immediately: %v", err)
+			replyAttempts <- err
+		} else {
+			// Publish is async, flush to check for errors
+			flushErr := testConn.Flush()
+			if flushErr != nil {
+				t.Logf("Second reply failed on flush: %v", flushErr)
+				replyAttempts <- flushErr
+			} else if lastErr := testConn.LastError(); lastErr != nil {
+				t.Logf("Second reply failed (permission denied): %v", lastErr)
+				replyAttempts <- lastErr
+			} else {
+				// No error - this means MaxMsgs: 1 didn't work
+				replyAttempts <- nil
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("Failed to create responder: %v", err)
+	}
+	defer responderSub.Unsubscribe()
+
+	// Make a request
+	t.Log("Sending request...")
+	response, err := testConn.Request("test.maxmsgs", []byte("test request"), 3*time.Second)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+
+	// Verify we got the first reply
+	if string(response.Data) != "first reply" {
+		t.Errorf("Expected 'first reply', got: %s", string(response.Data))
+	} else {
+		t.Log("Received first reply successfully")
+	}
+
+	// Wait for both reply attempts to complete
+	firstReplyErr := <-replyAttempts
+	secondReplyErr := <-replyAttempts
+
+	// Validate results
+	if firstReplyErr != nil {
+		t.Errorf("First reply should succeed, but got error: %v", firstReplyErr)
+	} else {
+		t.Log("✅ First reply succeeded (expected)")
+	}
+
+	if secondReplyErr == nil {
+		t.Errorf("❌ Second reply should fail (MaxMsgs: 1), but it succeeded")
+	} else {
+		t.Logf("✅ Second reply correctly rejected: %v", secondReplyErr)
+	}
+
+	t.Log("E2E test passed - MaxMsgs: 1 limitation validated")
+	t.Log("  - Responder can send first reply (MaxMsgs: 1 allows)")
+	t.Log("  - Responder cannot send second reply (permission expired)")
+	t.Log("  - Request-reply security working as expected")
+}
+
 // Mock JWT validator for E2E testing
 type mockJWTValidator struct {
 	validateFunc func(token string) (*internalJWT.Claims, error)
