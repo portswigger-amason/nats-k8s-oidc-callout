@@ -49,26 +49,33 @@ func Load() (*Config, error) {
 		CacheCleanupInterval: getEnvDuration("CACHE_CLEANUP_INTERVAL", 15*time.Minute),
 	}
 
-	// Required variables
+	// NATS configuration with default URL
+	cfg.NatsURL = getEnv("NATS_URL", "nats://nats:4222")
+
+	// Kubernetes JWT validation with conditional defaults for in-cluster deployments
+	if cfg.K8sInCluster {
+		cfg.JWKSUrl = getEnv("JWKS_URL", "https://kubernetes.default.svc/openid/v1/jwks")
+		cfg.JWTIssuer = getEnv("JWT_ISSUER", "https://kubernetes.default.svc")
+	} else {
+		cfg.JWKSUrl = os.Getenv("JWKS_URL")
+		cfg.JWTIssuer = os.Getenv("JWT_ISSUER")
+	}
+	cfg.JWTAudience = getEnv("JWT_AUDIENCE", "nats")
+
+	// Required variables (no reasonable defaults)
 	var missing []string
 
-	if cfg.NatsURL = os.Getenv("NATS_URL"); cfg.NatsURL == "" {
-		missing = append(missing, "NATS_URL")
-	}
 	if cfg.NatsCredsFile = os.Getenv("NATS_CREDS_FILE"); cfg.NatsCredsFile == "" {
 		missing = append(missing, "NATS_CREDS_FILE")
 	}
 	if cfg.NatsAccount = os.Getenv("NATS_ACCOUNT"); cfg.NatsAccount == "" {
 		missing = append(missing, "NATS_ACCOUNT")
 	}
-	if cfg.JWKSUrl = os.Getenv("JWKS_URL"); cfg.JWKSUrl == "" {
+	if cfg.JWKSUrl == "" {
 		missing = append(missing, "JWKS_URL")
 	}
-	if cfg.JWTIssuer = os.Getenv("JWT_ISSUER"); cfg.JWTIssuer == "" {
+	if cfg.JWTIssuer == "" {
 		missing = append(missing, "JWT_ISSUER")
-	}
-	if cfg.JWTAudience = os.Getenv("JWT_AUDIENCE"); cfg.JWTAudience == "" {
-		missing = append(missing, "JWT_AUDIENCE")
 	}
 
 	if len(missing) > 0 {

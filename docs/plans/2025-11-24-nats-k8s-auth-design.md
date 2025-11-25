@@ -43,29 +43,37 @@ ServiceAccount Cache ← Query annotations ← Permission Builder
 
 ```bash
 # NATS Connection
-NATS_URL=nats://nats:4222              # NATS server URL
 NATS_CREDS_FILE=/etc/nats/auth.creds   # Path to NATS credentials file
 NATS_ACCOUNT=MyAccount                  # NATS account name to assign clients
-
-# Kubernetes JWT Validation
-JWKS_URL=https://kubernetes.default.svc/openid/v1/jwks  # K8s JWKS endpoint
-JWT_ISSUER=https://kubernetes.default.svc                # Expected issuer claim
-JWT_AUDIENCE=nats                                        # Expected audience claim
-
-# ServiceAccount Annotation Settings
-SA_ANNOTATION_PREFIX=nats.io/           # Prefix for NATS-related annotations
-
-# Cache & Cleanup
-CACHE_CLEANUP_INTERVAL=15m              # Evict unused cache entries older than this
 ```
 
 ### Optional Environment Variables
 
 ```bash
-PORT=8080                               # HTTP server port for health/metrics
-K8S_IN_CLUSTER=true                     # Use in-cluster K8s config
-K8S_NAMESPACE=                          # Empty = watch all namespaces
-LOG_LEVEL=info                          # Logging level: debug, info, warn, error
+# NATS Connection
+NATS_URL=nats://nats:4222              # NATS server URL (default: nats://nats:4222)
+
+# Kubernetes JWT Validation
+# When K8S_IN_CLUSTER=true (default), these automatically default to standard K8s endpoints
+JWKS_URL=https://kubernetes.default.svc/openid/v1/jwks  # K8s JWKS endpoint (auto-default when in-cluster)
+JWT_ISSUER=https://kubernetes.default.svc                # Expected issuer claim (auto-default when in-cluster)
+JWT_AUDIENCE=nats                                        # Expected audience claim (default: nats)
+
+# ServiceAccount Annotation Settings
+SA_ANNOTATION_PREFIX=nats.io/           # Prefix for NATS-related annotations (default: nats.io/)
+
+# Cache & Cleanup
+CACHE_CLEANUP_INTERVAL=15m              # Evict unused cache entries (default: 15m)
+
+# HTTP Server
+PORT=8080                               # HTTP server port for health/metrics (default: 8080)
+
+# Kubernetes Client
+K8S_IN_CLUSTER=true                     # Use in-cluster K8s config (default: true)
+K8S_NAMESPACE=                          # Empty = watch all namespaces (default: "")
+
+# Logging
+LOG_LEVEL=info                          # Logging level: debug, info, warn, error (default: info)
 ```
 
 ## Permission Model

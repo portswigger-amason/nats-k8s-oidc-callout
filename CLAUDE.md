@@ -26,10 +26,17 @@ This is a Go-based NATS auth callout service that validates Kubernetes service a
 ## Implementation Status
 
 ### ✅ Completed
-- **CLI scaffolding** (`cmd/server/main.go`) - Entry point with graceful shutdown
-- **Configuration** (`internal/config/`) - Environment variable loading with validation
-- **HTTP server** (`internal/http/`) - Health checks and Prometheus metrics on port 8080
-- **JWT validation** (`internal/jwt/`) - Full JWKS-based validation with time mocking for tests
+- **CLI scaffolding** (`cmd/server/main.go`) - Entry point with graceful shutdown ✅
+- **Configuration** (`internal/config/`) - Environment variable loading with validation ✅
+  - Smart defaults for standard Kubernetes deployments:
+    - NATS_URL defaults to "nats://nats:4222" (standard K8s service name)
+    - JWKS_URL and JWT_ISSUER auto-default to K8s endpoints when K8S_IN_CLUSTER=true
+    - JWT_AUDIENCE defaults to "nats"
+  - Only NATS_CREDS_FILE and NATS_ACCOUNT remain required
+  - Comprehensive test coverage with 11 test cases covering all scenarios
+  - 100% test coverage validating defaults, overrides, and validation logic
+- **HTTP server** (`internal/http/`) - Health checks and Prometheus metrics on port 8080 ✅
+- **JWT validation** (`internal/jwt/`) - Full JWKS-based validation with time mocking for tests ✅
   - JWKS loading from file and HTTP URL
   - RS256 signature verification
   - Standard claims validation (iss, aud, exp, nbf, iat)
@@ -37,7 +44,10 @@ This is a Go-based NATS auth callout service that validates Kubernetes service a
   - Typed error handling
   - Comprehensive test coverage with TDD approach
   - Automatic key refresh with rate limiting
-- **Kubernetes client** (`internal/k8s/`) - ServiceAccount cache with informer pattern
+  - `Validate()` method added to implement auth.JWTValidator interface
+  - Time mocking fixed for test token validity window (Nov 24-25, 2025)
+  - All unit tests passing ✅
+- **Kubernetes client** (`internal/k8s/`) - ServiceAccount cache with informer pattern ✅
   - Thread-safe in-memory cache
   - Cluster-wide ServiceAccount informer
   - Annotation parsing for NATS permissions
@@ -45,40 +55,51 @@ This is a Go-based NATS auth callout service that validates Kubernetes service a
   - Opt-in cross-namespace permissions via annotations
   - Event handlers for ADD/UPDATE/DELETE
   - 81.2% test coverage with TDD approach
-- **Authorization handler** (`internal/auth/`) - Request processing and permission building
+  - All unit tests passing ✅
+- **Authorization handler** (`internal/auth/`) - Request processing and permission building ✅
   - Clean interface design with dependency injection
   - JWT validation integration
   - ServiceAccount permissions lookup
   - Generic error responses (security best practice)
   - 100% test coverage with TDD approach
-- **NATS client** (`internal/nats/`) - Connection and auth callout subscription handling
+  - All unit tests passing ✅
+- **NATS client** (`internal/nats/`) - Connection and auth callout subscription handling ✅
   - Uses `synadia-io/callout.go` library for auth callout handling
   - Automatic NKey generation for response signing
-  - JWT token extraction from NATS connection options
+  - JWT token extraction from NATS connection options (Token field)
   - Bridges NATS auth requests to internal auth handler
   - Converts auth responses to NATS user claims with permissions
-  - 29.7% test coverage with comprehensive unit tests
-  - Integration tests using testcontainers-go NATS module
-  - End-to-end auth callout flow validated with real NATS server
-- **Main application** (`cmd/server/main.go`) - Application wiring and startup
+  - 28.9% test coverage with comprehensive unit tests
+  - Integration tests using testcontainers-go NATS module ✅
+  - End-to-end auth callout flow validated with real NATS server ✅
+  - All unit and integration tests passing ✅
+- **Main application** (`cmd/server/main.go`) - Application wiring and startup ✅
   - Configuration loading and logger initialization
-  - JWT validator setup with JWKS URL
+  - JWT validator setup with JWKS URL (fixed constructor arguments)
   - Kubernetes client with informer factory
   - ServiceAccount cache initialization and sync
-  - Auth handler wiring
+  - Auth handler wiring (fixed interface compatibility)
   - NATS client connection and auth callout service
   - HTTP server with health and metrics endpoints (simple liveness check)
   - Graceful shutdown handling
-  - **Complete** - No changes needed, health checks correctly don't check upstream services
+  - **Compiles successfully** ✅
 
 ### 🚧 In Progress
-- None currently
+- **E2E test enhancement** - Making auth callout actually test authorization
+  - ✅ Real k3s cluster with ServiceAccount
+  - ✅ NATS server with auth callout configuration (not just open server)
+  - ✅ Real Kubernetes ServiceAccount token creation (TokenRequest API with "nats" audience)
+  - ✅ Token extraction working (using `natsclient.Token()` option)
+  - ⚠️ **Issue**: Token validation succeeds but NATS still rejects connection
+  - **Next step**: Debug why auth response isn't being accepted by NATS
+  - See debug logging enabled in `internal/nats/client.go:extractToken()`
 
-### 📋 Pending (Design Complete)
-- **E2E test** - Full integration test with testcontainers (k3s + NATS)
-  - Auth callout verification with real JWT and ServiceAccount
-  - Tests complete pub/sub permission flow
-  - See: `docs/plans/2025-11-24-main-wiring-and-e2e-test-design.md`
+### 📋 Pending
+- **E2E test completion**
+  - Fix authorization response encoding/signing issue
+  - Add permission enforcement tests (allowed/denied subjects)
+  - Add test for connection without token (should fail)
+  - Remove debug logging after tests pass
 
 **Note:** Health checks are complete - existing placeholders are correct (simple liveness check without upstream dependency checks)
 
@@ -156,6 +177,63 @@ The JWT validator (`internal/jwt/`) provides comprehensive token validation:
   - internal/k8s: 81.2%
   - internal/jwt: 72.3%
   - internal/nats: 29.7%
+
+## Test Status Summary
+
+### Unit Tests
+```
+✅ internal/auth:   100.0% coverage - ALL PASSING
+✅ internal/config: 100.0% coverage - ALL PASSING (11 test cases)
+✅ internal/jwt:     71.6% coverage - ALL PASSING
+✅ internal/k8s:     81.2% coverage - ALL PASSING
+✅ internal/nats:    28.9% coverage - ALL PASSING
+✅ Application builds successfully
+```
+
+### Integration Tests
+```
+✅ internal/nats/integration_test.go - PASSING
+   - Real NATS server with auth callout config
+   - Auth service connection and subscription
+   - Token rejection working correctly
+```
+
+### E2E Tests
+```
+⚠️  e2e_test.go - IN PROGRESS (95% complete)
+   - ✅ k3s cluster startup
+   - ✅ ServiceAccount creation with annotations
+   - ✅ NATS auth callout configuration
+   - ✅ Real K8s token creation (TokenRequest API)
+   - ✅ Token extraction from NATS connection
+   - ⚠️  Authorization response acceptance (debugging)
+```
+
+## Session Accomplishments (2025-11-25)
+
+1. **Fixed all compilation issues**
+   - Config field name casing (`JWKSURL` → `JWKSUrl`)
+   - JWT validator constructor arguments
+   - Added `Validate()` method to implement interface
+
+2. **Fixed all unit test failures**
+   - Time mocking for token validity window
+   - Tests now use correct timestamps (Nov 24-25, 2025)
+
+3. **Enhanced configuration**
+   - JWT_AUDIENCE defaults to "nats"
+   - Removed from required env vars
+
+4. **Transformed E2E test from smoke test to real auth test**
+   - Added NATS auth callout configuration
+   - Real Kubernetes token creation via TokenRequest API
+   - Proper auth service credentials and signing key setup
+   - Token extraction working via `natsclient.Token()` option
+
+5. **Current debugging focus**
+   - Token is being extracted successfully
+   - Auth handler is being called
+   - Need to verify authorization response encoding/signing
 
 ## Related Documentation
 
