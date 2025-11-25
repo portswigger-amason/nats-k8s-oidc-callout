@@ -75,7 +75,7 @@ The service provides **two inbox patterns** for request-reply, balancing conveni
 
 2. **Private Inbox (`_INBOX_namespace_serviceaccount.>`)** - Enhanced security
    - Opt-in isolation preventing eavesdropping between workloads
-   - Clients configure custom inbox prefix: `nats.CustomInboxPrefix("_INBOX_foo_my-service.")`
+   - Clients configure custom inbox prefix: `nats.CustomInboxPrefix("_INBOX_foo_my-service")`
    - Provides defense-in-depth for multi-tenant scenarios
 
 **Response Publishing Security:**
