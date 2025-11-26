@@ -80,7 +80,7 @@ jobs:
           path: out/*
           retention-days: 30
 
-      # Docker
+      # Docker Build (local)
       - name: Set up QEMU
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: docker/setup-qemu-action@v3
@@ -88,14 +88,6 @@ jobs:
       - name: Set up Docker Buildx
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
@@ -105,6 +97,52 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.calver.outputs.tag }}
+
+      - name: Build image (local)
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Security Scan (before push)
+      - name: Run Trivy vulnerability scanner
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ steps.meta.outputs.tags }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy vulnerability scanner (fail on critical)
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ steps.meta.outputs.tags }}
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      # Docker Push (only after security scan passes)
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
@@ -144,31 +182,6 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-
-      # Security
-      - name: Run Trivy vulnerability scanner
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.calver.outputs.tag }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy results to GitHub Security
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Run Trivy vulnerability scanner (table output)
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.calver.outputs.tag }}
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
 
       # Release
       - name: Download binaries
