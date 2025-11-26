@@ -1,9 +1,12 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
-  allow-parallel-runners: true
+  concurrency: 4
 
 linters:
+  default: none
   enable:
     # Default linters
     - errcheck      # Check for unchecked errors
@@ -36,102 +39,104 @@ linters:
     - whitespace    # Detection of leading and trailing whitespace
     - stylecheck    # Stylecheck is a replacement for golint
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-    exclude-functions:
-      - (*database/sql.Rows).Close
-      - (*database/sql.DB).Close
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      exclude-functions:
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
 
-  govet:
-    enable-all: true
-    disable:
-      - shadow        # Reports variables that shadow other variables
-      - fieldalignment # Too noisy for structs
+    govet:
+      enable-all: true
+      disable:
+        - shadow        # Reports variables that shadow other variables
+        - fieldalignment # Too noisy for structs
 
-  gocyclo:
-    min-complexity: 15
+    gocyclo:
+      min-complexity: 15
 
-  gocognit:
-    min-complexity: 20
+    gocognit:
+      min-complexity: 20
 
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-      - style
-    disabled-checks:
-      - dupImport
-      - ifElseChain
-      - hugeParam
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - dupImport
+        - ifElseChain
+        - hugeParam
 
-  revive:
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+        - name: unexported-return
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: unreachable-code
+
+    gosec:
+      excludes:
+        - G404 # Use of weak random number generator - acceptable for non-crypto use
+      config:
+        global:
+          audit: true
+
+    stylecheck:
+      checks: ["all", "-ST1003"] # ST1003: should not use underscores in Go names
+
+  exclusions:
     rules:
-      - name: exported
-        arguments:
-          - disableStutteringCheck
-      - name: unexported-return
-      - name: blank-imports
-      - name: context-as-argument
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: increment-decrement
-      - name: var-naming
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: indent-error-flow
-      - name: superfluous-else
-      - name: unreachable-code
+      # Exclude some linters from running on tests files
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - gosec
+          - gocritic
+          - funlen
+          - gocognit
 
-  gosec:
-    excludes:
-      - G404 # Use of weak random number generator - acceptable for non-crypto use
-    config:
-      global:
-        audit: true
+      # Exclude E2E test files from certain checks
+      - path: e2e_.*_test\.go
+        linters:
+          - gocyclo
+          - gocognit
+          - funlen
+          - gocritic
 
-  stylecheck:
-    checks: ["all", "-ST1003"] # ST1003: should not use underscores in Go names
+      # Allow underscores in test names
+      - path: _test\.go
+        text: "should not use underscores"
+
+      # Exclude known issues in generated code
+      - path: .*_generated\.go
+        linters:
+          - all
 
 issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - gosec
-        - gocritic
-        - funlen
-        - gocognit
-
-    # Exclude E2E test files from certain checks
-    - path: e2e_.*_test\.go
-      linters:
-        - gocyclo
-        - gocognit
-        - funlen
-        - gocritic
-
-    # Allow underscores in test names
-    - path: _test\.go
-      text: "should not use underscores"
-
-    # Exclude known issues in generated code
-    - path: .*_generated\.go
-      linters:
-        - all
-
   max-issues-per-linter: 0
   max-same-issues: 0
 
 output:
   formats:
-    - format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
-  sort-results: true
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+      sort-results: true
