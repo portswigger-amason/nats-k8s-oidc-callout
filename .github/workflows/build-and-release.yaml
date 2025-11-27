@@ -73,13 +73,6 @@ jobs:
         env:
           VERSION: ${{ steps.calver.outputs.tag }}
 
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries
-          path: out/*
-          retention-days: 30
-
       # Docker Build (local)
       - name: Set up QEMU
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
@@ -97,6 +90,10 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.calver.outputs.tag }}
+          labels: |
+            org.opencontainers.image.description=NATS authentication callout service for Kubernetes OIDC service account tokens
+            org.opencontainers.image.title=nats-k8s-oidc-callout
+            org.opencontainers.image.vendor=PortSwigger
 
       - name: Build image (local for security scan)
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
@@ -167,14 +164,6 @@ jobs:
           format: spdx-json
           output-file: sbom.spdx.json
 
-      - name: Upload SBOM
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.spdx.json
-          retention-days: 90
-
       - name: Attest image
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest-build-provenance@v3
@@ -184,19 +173,6 @@ jobs:
           push-to-registry: true
 
       # Release
-      - name: Download binaries
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries
-          path: out/
-
-      - name: Download SBOM
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses: actions/download-artifact@v4
-        with:
-          name: sbom
-
       - name: Generate release notes
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         id: notes
