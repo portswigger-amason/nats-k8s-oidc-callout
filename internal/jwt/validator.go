@@ -142,13 +142,32 @@ func (v *Validator) ValidateToken(tokenString string) (*Claims, error) {
 
 // validateStandardClaims validates issuer, audience, expiration, etc.
 func (v *Validator) validateStandardClaims(claims jwt.MapClaims) error {
-	// Validate issuer
-	iss, ok := claims["iss"].(string)
-	if !ok || iss != v.issuer {
-		return fmt.Errorf("%w: issuer mismatch (expected %q, got %q)", ErrInvalidClaims, v.issuer, iss)
+	if err := validateIssuer(claims, v.issuer); err != nil {
+		return err
 	}
 
-	// Validate audience
+	if err := validateAudience(claims, v.audience); err != nil {
+		return err
+	}
+
+	if err := validateTimeClaims(claims, v.timeFunc); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateIssuer validates the issuer claim.
+func validateIssuer(claims jwt.MapClaims, expectedIssuer string) error {
+	iss, ok := claims["iss"].(string)
+	if !ok || iss != expectedIssuer {
+		return fmt.Errorf("%w: issuer mismatch (expected %q, got %q)", ErrInvalidClaims, expectedIssuer, iss)
+	}
+	return nil
+}
+
+// validateAudience validates the audience claim.
+func validateAudience(claims jwt.MapClaims, expectedAudience string) error {
 	aud, ok := claims["aud"]
 	if !ok {
 		return fmt.Errorf("%w: missing audience", ErrInvalidClaims)
@@ -172,27 +191,32 @@ func (v *Validator) validateStandardClaims(claims jwt.MapClaims) error {
 	// Check if expected audience is in the list
 	found := false
 	for _, a := range audiences {
-		if a == v.audience {
+		if a == expectedAudience {
 			found = true
 			break
 		}
 	}
 	if !found {
-		return fmt.Errorf("%w: audience mismatch (expected %q)", ErrInvalidClaims, v.audience)
+		return fmt.Errorf("%w: audience mismatch (expected %q)", ErrInvalidClaims, expectedAudience)
 	}
 
+	return nil
+}
+
+// validateTimeClaims validates expiration, not-before, and issued-at claims.
+func validateTimeClaims(claims jwt.MapClaims, timeFunc func() time.Time) error {
 	// Validate expiration (exp)
 	exp, ok := claims["exp"].(float64)
 	if !ok {
 		return fmt.Errorf("%w: missing or invalid exp claim", ErrInvalidClaims)
 	}
-	if v.timeFunc().Unix() > int64(exp) {
+	if timeFunc().Unix() > int64(exp) {
 		return ErrExpiredToken
 	}
 
 	// Validate not-before (nbf)
 	if nbf, ok := claims["nbf"].(float64); ok {
-		if v.timeFunc().Unix() < int64(nbf) {
+		if timeFunc().Unix() < int64(nbf) {
 			return fmt.Errorf("%w: token not yet valid", ErrInvalidClaims)
 		}
 	}
@@ -200,7 +224,7 @@ func (v *Validator) validateStandardClaims(claims jwt.MapClaims) error {
 	// Validate issued-at (iat)
 	if iat, ok := claims["iat"].(float64); ok {
 		// Make sure issued-at is not in the future (with 1 minute tolerance)
-		if v.timeFunc().Unix()+60 < int64(iat) {
+		if timeFunc().Unix()+60 < int64(iat) {
 			return fmt.Errorf("%w: issued-at is in the future", ErrInvalidClaims)
 		}
 	}

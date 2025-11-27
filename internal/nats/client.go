@@ -200,33 +200,9 @@ func LoadSigningKeyFromCredsFile(path string) (nkeys.KeyPair, error) {
 		}
 	}()
 
-	var seed string
-	inSeedSection := false
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		if strings.Contains(line, "BEGIN USER NKEY SEED") || strings.Contains(line, "BEGIN NKEY SEED") {
-			inSeedSection = true
-			continue
-		}
-
-		if strings.Contains(line, "END USER NKEY SEED") || strings.Contains(line, "END NKEY SEED") {
-			break
-		}
-
-		if inSeedSection && line != "" {
-			seed = line
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read credentials file: %w", err)
-	}
-
-	if seed == "" {
-		return nil, fmt.Errorf("no seed found in credentials file")
+	seed, err := extractSeedFromFile(file)
+	if err != nil {
+		return nil, err
 	}
 
 	// Parse the seed into a KeyPair
@@ -236,6 +212,50 @@ func LoadSigningKeyFromCredsFile(path string) (nkeys.KeyPair, error) {
 	}
 
 	return kp, nil
+}
+
+// extractSeedFromFile scans a credentials file and extracts the seed value.
+func extractSeedFromFile(file *os.File) (string, error) {
+	var seed string
+	inSeedSection := false
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if isSeedSectionBegin(line) {
+			inSeedSection = true
+			continue
+		}
+
+		if isSeedSectionEnd(line) {
+			break
+		}
+
+		if inSeedSection && line != "" {
+			seed = line
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to read credentials file: %w", err)
+	}
+
+	if seed == "" {
+		return "", fmt.Errorf("no seed found in credentials file")
+	}
+
+	return seed, nil
+}
+
+// isSeedSectionBegin checks if a line marks the beginning of the seed section.
+func isSeedSectionBegin(line string) bool {
+	return strings.Contains(line, "BEGIN USER NKEY SEED") || strings.Contains(line, "BEGIN NKEY SEED")
+}
+
+// isSeedSectionEnd checks if a line marks the end of the seed section.
+func isSeedSectionEnd(line string) bool {
+	return strings.Contains(line, "END USER NKEY SEED") || strings.Contains(line, "END NKEY SEED")
 }
 
 // extractToken extracts the JWT token from the authorization request
