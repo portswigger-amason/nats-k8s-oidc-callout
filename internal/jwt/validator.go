@@ -1,3 +1,4 @@
+// Package jwt provides JWT token validation and claims extraction for Kubernetes service account tokens.
 package jwt
 
 import (
@@ -70,7 +71,7 @@ func NewValidatorFromURL(jwksURL, issuer, audience string) (*Validator, error) {
 // This is primarily for testing purposes. In production, use NewValidatorFromURL.
 func NewValidatorFromFile(jwksPath, issuer, audience string) (*Validator, error) {
 	// Read JWKS file
-	jwksData, err := os.ReadFile(jwksPath)
+	jwksData, err := os.ReadFile(jwksPath) //nolint:gosec // jwksPath comes from configuration
 	if err != nil {
 		return nil, fmt.Errorf("failed to read JWKS file: %w", err)
 	}
@@ -250,11 +251,14 @@ func (v *Validator) extractK8sClaims(claims jwt.MapClaims) (*Claims, error) {
 		return nil, fmt.Errorf("%w: serviceaccount name missing or empty", ErrMissingK8sClaims)
 	}
 
+	// Extract issuer (optional field, may not be present in all tokens)
+	issuer, _ := claims["iss"].(string) //nolint:errcheck // issuer is optional
+
 	// Build Claims struct
 	result := &Claims{
 		Namespace:      namespace,
 		ServiceAccount: saName,
-		Issuer:         claims["iss"].(string),
+		Issuer:         issuer,
 	}
 
 	// Extract audience

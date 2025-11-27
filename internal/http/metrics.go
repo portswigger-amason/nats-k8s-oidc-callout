@@ -1,3 +1,4 @@
+// Package http provides HTTP server with health and metrics endpoints.
 package http
 
 import (

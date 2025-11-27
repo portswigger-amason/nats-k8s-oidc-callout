@@ -78,7 +78,7 @@ func NewClient(factory informers.SharedInformerFactory, logger *zap.Logger) *Cli
 }
 
 // GetPermissions retrieves the NATS permissions for a ServiceAccount
-func (c *Client) GetPermissions(namespace, name string) (pubPerms []string, subPerms []string, found bool) {
+func (c *Client) GetPermissions(namespace, name string) (pubPerms, subPerms []string, found bool) {
 	return c.cache.Get(namespace, name)
 }
 

@@ -138,7 +138,7 @@ func TestLoad(t *testing.T) {
 			errMsg:  "NATS_ACCOUNT",
 		},
 		{
-			name: "missing multiple required variables",
+			name:    "missing multiple required variables",
 			envVars: map[string]string{
 				// Missing both NATS_CREDS_FILE and NATS_ACCOUNT
 			},

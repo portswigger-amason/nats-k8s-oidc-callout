@@ -51,7 +51,6 @@ func TestClient_BuildUserClaims(t *testing.T) {
 
 	// Auth response with permissions
 	authResp := &internalAuth.AuthResponse{
-		Allowed:              true,
 		PublishPermissions:   []string{"hakawai.>", "platform.events.>"},
 		SubscribePermissions: []string{"hakawai.>", "platform.commands.*"},
 	}
@@ -125,9 +124,9 @@ func TestClient_Shutdown(t *testing.T) {
 // TestExtractToken tests JWT token extraction from authorization requests
 func TestExtractToken(t *testing.T) {
 	tests := []struct {
-		name     string
-		request  *jwt.AuthorizationRequest
-		wantJWT  string
+		name    string
+		request *jwt.AuthorizationRequest
+		wantJWT string
 	}{
 		{
 			name: "Token in JWT field",

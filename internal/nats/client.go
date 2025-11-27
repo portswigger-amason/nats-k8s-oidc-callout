@@ -1,3 +1,4 @@
+// Package nats provides NATS authentication callout service integration.
 package nats
 
 import (
@@ -165,7 +166,9 @@ func (c *Client) Start(ctx context.Context) error {
 // Shutdown gracefully shuts down the client
 func (c *Client) Shutdown(ctx context.Context) error {
 	if c.service != nil {
-		c.service.Stop()
+		if err := c.service.Stop(); err != nil {
+			c.logger.Error("failed to stop NATS service", zap.Error(err))
+		}
 	}
 
 	if c.conn != nil {
@@ -175,31 +178,25 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// loadSigningKeyFromConnection attempts to load the signing key from the NATS URL
-// If the URL contains credentials or a credentials file is specified, extract the seed
-func (c *Client) loadSigningKeyFromConnection() error {
-	// Try to parse credentials from URL
-	// Format: nats://seed@host:port or nats://user:seed@host:port
-	// For now, we rely on the NATS client to handle credentials
-	// The signing key will be set externally via SetSigningKey() if needed
-	return fmt.Errorf("signing key must be set externally")
-}
-
 // LoadSigningKeyFromCredsFile parses a NATS credentials file and extracts the account seed
 // Credentials file format:
-//   -----BEGIN NATS USER JWT-----
-//   <jwt>
-//   ------END NATS USER JWT------
 //
-//   -----BEGIN USER NKEY SEED-----
-//   <seed>
-//   ------END USER NKEY SEED------
+//	-----BEGIN NATS USER JWT-----
+//	<jwt>
+//	------END NATS USER JWT------
+//
+//	-----BEGIN USER NKEY SEED-----
+//	<seed>
+//	------END USER NKEY SEED------
 func LoadSigningKeyFromCredsFile(path string) (nkeys.KeyPair, error) {
-	file, err := os.Open(path)
+	file, err := os.Open(path) //nolint:gosec // path comes from configuration
 	if err != nil {
 		return nil, fmt.Errorf("failed to open credentials file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		// File close error is not critical for reading operations
+		_ = file.Close() //nolint:errcheck,gosec // close errors on read operations are not critical
+	}()
 
 	var seed string
 	inSeedSection := false
@@ -214,7 +211,6 @@ func LoadSigningKeyFromCredsFile(path string) (nkeys.KeyPair, error) {
 		}
 
 		if strings.Contains(line, "END USER NKEY SEED") || strings.Contains(line, "END NKEY SEED") {
-			inSeedSection = false
 			break
 		}
 

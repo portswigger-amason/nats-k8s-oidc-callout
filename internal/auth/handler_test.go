@@ -78,9 +78,9 @@ func TestHandler_Authorize_Success(t *testing.T) {
 // TestHandler_Authorize_InvalidJWT tests JWT validation failures
 func TestHandler_Authorize_InvalidJWT(t *testing.T) {
 	tests := []struct {
-		name         string
-		jwtError     error
-		expectedMsg  string
+		name        string
+		jwtError    error
+		expectedMsg string
 	}{
 		{
 			name:        "Expired token",

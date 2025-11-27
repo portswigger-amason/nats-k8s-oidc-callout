@@ -11,13 +11,13 @@ import (
 // TestCache_Get tests retrieving ServiceAccount permissions from cache
 func TestCache_Get(t *testing.T) {
 	tests := []struct {
-		name          string
-		namespace     string
-		saName        string
-		setupCache    func(*Cache)
-		wantPubPerms  []string
-		wantSubPerms  []string
-		wantFound     bool
+		name         string
+		namespace    string
+		saName       string
+		setupCache   func(*Cache)
+		wantPubPerms []string
+		wantSubPerms []string
+		wantFound    bool
 	}{
 		{
 			name:      "ServiceAccount exists with both pub and sub annotations",
@@ -195,70 +195,70 @@ func TestCache_Delete(t *testing.T) {
 // TestParseSubjects tests parsing comma-separated NATS subjects from annotations
 func TestParseSubjects(t *testing.T) {
 	tests := []struct {
-		name           string
-		annotation     string
-		wantSubjects   []string
-		wantFiltered   []string
+		name         string
+		annotation   string
+		wantSubjects []string
+		wantFiltered []string
 	}{
 		{
-			name:           "Multiple subjects with whitespace",
-			annotation:     "platform.events.>, shared.metrics.*",
-			wantSubjects:   []string{"platform.events.>", "shared.metrics.*"},
-			wantFiltered:   []string{},
+			name:         "Multiple subjects with whitespace",
+			annotation:   "platform.events.>, shared.metrics.*",
+			wantSubjects: []string{"platform.events.>", "shared.metrics.*"},
+			wantFiltered: []string{},
 		},
 		{
-			name:           "Single subject",
-			annotation:     "platform.commands.*",
-			wantSubjects:   []string{"platform.commands.*"},
-			wantFiltered:   []string{},
+			name:         "Single subject",
+			annotation:   "platform.commands.*",
+			wantSubjects: []string{"platform.commands.*"},
+			wantFiltered: []string{},
 		},
 		{
-			name:           "Empty annotation",
-			annotation:     "",
-			wantSubjects:   []string{},
-			wantFiltered:   []string{},
+			name:         "Empty annotation",
+			annotation:   "",
+			wantSubjects: []string{},
+			wantFiltered: []string{},
 		},
 		{
-			name:           "Multiple subjects with extra whitespace",
-			annotation:     "  a.> ,  b.* , c  ",
-			wantSubjects:   []string{"a.>", "b.*", "c"},
-			wantFiltered:   []string{},
+			name:         "Multiple subjects with extra whitespace",
+			annotation:   "  a.> ,  b.* , c  ",
+			wantSubjects: []string{"a.>", "b.*", "c"},
+			wantFiltered: []string{},
 		},
 		{
-			name:           "Trailing comma",
-			annotation:     "a.>, b.*,",
-			wantSubjects:   []string{"a.>", "b.*"},
-			wantFiltered:   []string{},
+			name:         "Trailing comma",
+			annotation:   "a.>, b.*,",
+			wantSubjects: []string{"a.>", "b.*"},
+			wantFiltered: []string{},
 		},
 		{
-			name:           "Filter _INBOX.> pattern",
-			annotation:     "_INBOX.>, platform.events.>",
-			wantSubjects:   []string{"platform.events.>"},
-			wantFiltered:   []string{"_INBOX.>"},
+			name:         "Filter _INBOX.> pattern",
+			annotation:   "_INBOX.>, platform.events.>",
+			wantSubjects: []string{"platform.events.>"},
+			wantFiltered: []string{"_INBOX.>"},
 		},
 		{
-			name:           "Filter _REPLY.> pattern",
-			annotation:     "_REPLY.>, platform.events.>",
-			wantSubjects:   []string{"platform.events.>"},
-			wantFiltered:   []string{"_REPLY.>"},
+			name:         "Filter _REPLY.> pattern",
+			annotation:   "_REPLY.>, platform.events.>",
+			wantSubjects: []string{"platform.events.>"},
+			wantFiltered: []string{"_REPLY.>"},
 		},
 		{
-			name:           "Filter custom _INBOX pattern",
-			annotation:     "_INBOX_custom.>, platform.events.>",
-			wantSubjects:   []string{"platform.events.>"},
-			wantFiltered:   []string{"_INBOX_custom.>"},
+			name:         "Filter custom _INBOX pattern",
+			annotation:   "_INBOX_custom.>, platform.events.>",
+			wantSubjects: []string{"platform.events.>"},
+			wantFiltered: []string{"_INBOX_custom.>"},
 		},
 		{
-			name:           "Filter multiple internal patterns",
-			annotation:     "_INBOX.>, _REPLY.>, platform.events.>, _INBOX_custom.>",
-			wantSubjects:   []string{"platform.events.>"},
-			wantFiltered:   []string{"_INBOX.>", "_REPLY.>", "_INBOX_custom.>"},
+			name:         "Filter multiple internal patterns",
+			annotation:   "_INBOX.>, _REPLY.>, platform.events.>, _INBOX_custom.>",
+			wantSubjects: []string{"platform.events.>"},
+			wantFiltered: []string{"_INBOX.>", "_REPLY.>", "_INBOX_custom.>"},
 		},
 		{
-			name:           "Only internal patterns",
-			annotation:     "_INBOX.>, _REPLY.>",
-			wantSubjects:   []string{},
-			wantFiltered:   []string{"_INBOX.>", "_REPLY.>"},
+			name:         "Only internal patterns",
+			annotation:   "_INBOX.>, _REPLY.>",
+			wantSubjects: []string{},
+			wantFiltered: []string{"_INBOX.>", "_REPLY.>"},
 		},
 	}
 

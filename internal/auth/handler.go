@@ -1,3 +1,4 @@
+// Package auth provides NATS authorization handlers for Kubernetes service account authentication.
 package auth
 
 import (

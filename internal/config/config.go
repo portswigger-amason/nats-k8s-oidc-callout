@@ -1,3 +1,4 @@
+// Package config provides configuration loading from environment variables.
 package config
 
 import (
@@ -18,10 +19,10 @@ type Config struct {
 	NatsAccount   string
 
 	// Kubernetes JWT Validation
-	JWKSUrl      string // JWKS URL (mutually exclusive with JWKSPath)
-	JWKSPath     string // JWKS file path (mutually exclusive with JWKSUrl)
-	JWTIssuer    string
-	JWTAudience  string
+	JWKSUrl     string // JWKS URL (mutually exclusive with JWKSPath)
+	JWKSPath    string // JWKS file path (mutually exclusive with JWKSUrl)
+	JWTIssuer   string
+	JWTAudience string
 
 	// ServiceAccount Annotation Settings
 	SAAnnotationPrefix string

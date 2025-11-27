@@ -1,3 +1,4 @@
+// Package main provides the entry point for the NATS Kubernetes OIDC auth callout service.
 package main
 
 import (
@@ -42,7 +43,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		// Sync may fail on stdout/stderr, which is expected
+		_ = logger.Sync() //nolint:errcheck,gosec // sync errors on stdout/stderr are expected
+	}()
 
 	logger.Info("starting nats-k8s-oidc-callout",
 		zap.String("port", fmt.Sprintf("%d", cfg.Port)),
@@ -134,7 +138,11 @@ func run() error {
 	if err := natsClient.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start NATS client: %w", err)
 	}
-	defer natsClient.Shutdown(ctx)
+	defer func() {
+		if err := natsClient.Shutdown(ctx); err != nil {
+			logger.Error("failed to shutdown NATS client", zap.Error(err))
+		}
+	}()
 
 	logger.Info("NATS auth callout service started successfully")
 
@@ -190,10 +198,10 @@ func initLogger(level string) (*zap.Logger, error) {
 	}
 
 	// Create logger config
-	config := zap.NewProductionConfig()
-	config.Level = zap.NewAtomicLevelAt(zapLevel)
-	config.EncoderConfig.TimeKey = "timestamp"
-	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	loggerConfig := zap.NewProductionConfig()
+	loggerConfig.Level = zap.NewAtomicLevelAt(zapLevel)
+	loggerConfig.EncoderConfig.TimeKey = "timestamp"
+	loggerConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
-	return config.Build()
+	return loggerConfig.Build()
 }

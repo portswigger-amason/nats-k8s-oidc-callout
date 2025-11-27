@@ -1,3 +1,4 @@
+// Package k8s provides Kubernetes ServiceAccount caching and client functionality.
 package k8s
 
 import (
@@ -11,8 +12,9 @@ import (
 )
 
 const (
-	// Annotation keys for NATS permissions
+	// AnnotationAllowedPubSubjects is the annotation key for allowed NATS publish subjects.
 	AnnotationAllowedPubSubjects = "nats.io/allowed-pub-subjects"
+	// AnnotationAllowedSubSubjects is the annotation key for allowed NATS subscribe subjects.
 	AnnotationAllowedSubSubjects = "nats.io/allowed-sub-subjects"
 )
 
@@ -39,7 +41,7 @@ func NewCache(logger *zap.Logger) *Cache {
 
 // Get retrieves the permissions for a ServiceAccount by namespace and name.
 // Returns (pubPerms, subPerms, found) where found indicates if the SA exists in cache.
-func (c *Cache) Get(namespace, name string) ([]string, []string, bool) {
+func (c *Cache) Get(namespace, name string) (pubPerms, subPerms []string, found bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -147,7 +149,7 @@ func buildPermissions(sa *corev1.ServiceAccount, logger *zap.Logger) *Permission
 // parseSubjects parses a comma-separated list of NATS subjects from an annotation value.
 // Filters out any _INBOX and _REPLY patterns as those are automatically managed by NATS.
 // Returns both the parsed subjects and a list of filtered subjects.
-func parseSubjects(annotation string) (subjects []string, filtered []string) {
+func parseSubjects(annotation string) (subjects, filtered []string) {
 	if annotation == "" {
 		return []string{}, []string{}
 	}
