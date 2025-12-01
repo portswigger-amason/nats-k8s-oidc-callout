@@ -61,25 +61,7 @@ helm show chart oci://ghcr.io/portswigger-tim/charts/nats-k8s-oidc-callout
 
 All released charts are signed with [Sigstore](https://www.sigstore.dev/) using keyless signing. The signatures are stored in the transparency log and can be verified to ensure the chart hasn't been tampered with.
 
-#### Method 1: Using helm-sigstore Plugin (Recommended)
-
-The [helm-sigstore](https://github.com/sigstore/helm-sigstore) plugin provides the simplest verification experience for Helm users.
-
-**Install the plugin:**
-```bash
-helm plugin install https://github.com/sigstore/helm-sigstore
-```
-
-**Verify a chart:**
-```bash
-# Download the chart from GitHub releases
-wget https://github.com/portswigger-tim/nats-k8s-oidc-callout/releases/download/<VERSION>/nats-k8s-oidc-callout-<VERSION>.tgz
-
-# Verify with helm-sigstore
-helm sigstore verify nats-k8s-oidc-callout-<VERSION>.tgz
-```
-
-#### Method 2: Native Helm Verification (GPG)
+#### Method 1: Native Helm Verification (GPG)
 
 Traditional Helm provenance verification using GPG signatures. Each release includes a GPG-signed `.prov` file and the public key used to sign it.
 
@@ -99,9 +81,9 @@ helm verify nats-k8s-oidc-callout-<VERSION>.tgz
 
 **Note:** Each release uses a unique GPG key pair. The public key is included in the release assets and must be imported before verification.
 
-#### Method 3: Using Cosign Directly
+#### Method 2: Using Cosign Directly
 
-If you prefer not to install the plugin, you can use [Cosign](https://github.com/sigstore/cosign) directly.
+You can use [Cosign](https://github.com/sigstore/cosign) to verify the chart signature.
 
 **Install Cosign:**
 ```bash
@@ -129,7 +111,7 @@ cosign verify-blob \
 - Signature is recorded in Rekor transparency log
 - Chart hasn't been modified since signing
 
-#### Method 4: Verify OCI Chart in Registry
+#### Method 3: Verify OCI Chart in Registry
 
 Charts in the OCI registry are also signed and include SLSA provenance attestations. You can verify them directly from the registry.
 
