@@ -465,6 +465,10 @@ jobs:
           echo "Importing GPG public key..."
           gpg --import helm-signing-key.${CHART_VERSION}.pub
 
+          # Create legacy keyring format for Helm compatibility
+          # Modern GPG uses pubring.kbx, but Helm verify expects pubring.gpg
+          gpg --export > ~/.gnupg/pubring.gpg
+
           echo "Verifying Helm chart with GPG signature..."
           helm verify nats-k8s-oidc-callout-${CHART_VERSION}.tgz
 
