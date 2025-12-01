@@ -189,6 +189,12 @@ jobs:
           GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2 | head -n1)
           echo "key_id=${GPG_KEY_ID}" >> $GITHUB_OUTPUT
 
+          # Create legacy GPG keyring format for Helm compatibility
+          # Modern GPG uses pubring.kbx, but Helm expects pubring.gpg
+          gpg --export > ~/.gnupg/pubring.gpg
+          gpg --export-secret-keys > ~/.gnupg/secring.gpg
+          chmod 600 ~/.gnupg/secring.gpg
+
           # Export public key with simplified versioned filename
           gpg --armor --export ${GPG_KEY_ID} > helm-signing-key.${CHART_VERSION}.pub
 
