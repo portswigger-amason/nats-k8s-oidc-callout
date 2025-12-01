@@ -318,6 +318,10 @@ jobs:
         run: |
           CHART_VERSION="${{ steps.calver.outputs.tag }}"
           CHART_VERSION="${CHART_VERSION#v}"
+
+          # Generate changelog separately to avoid heredoc issues
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 2>/dev/null || echo "")..HEAD || echo "- Initial release")
+
           cat > release-notes.md << EOF
           ## Container Image
 
@@ -391,7 +395,7 @@ jobs:
 
           ## Changes
 
-          $(git log --pretty=format:"- %s (%h)" \$(git describe --tags --abbrev=0 2>/dev/null || echo "")..HEAD)
+          ${CHANGELOG}
           EOF
 
       - name: Create GitHub Release
