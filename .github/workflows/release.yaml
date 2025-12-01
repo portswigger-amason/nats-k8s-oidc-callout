@@ -457,6 +457,22 @@ jobs:
           echo "Downloaded artifacts:"
           ls -lah nats-k8s-oidc-callout-${CHART_VERSION}* helm-signing-key.${CHART_VERSION}.pub
 
+      - name: Install helm-sigstore plugin
+        run: |
+          echo "Installing helm-sigstore plugin..."
+          helm plugin install https://github.com/sigstore/helm-sigstore
+
+      - name: Verify with helm-sigstore plugin (Method 1 - Recommended)
+        id: verify_helm_sigstore
+        run: |
+          CHART_VERSION="${{ steps.version.outputs.chart_version }}"
+
+          echo "Verifying chart with helm-sigstore plugin..."
+          helm sigstore verify nats-k8s-oidc-callout-${CHART_VERSION}.tgz
+
+          echo "status=✅ Passed" >> $GITHUB_OUTPUT
+          echo "✅ helm-sigstore plugin verification successful"
+
       - name: Verify GPG signature (Method 2)
         id: verify_gpg
         run: |
@@ -546,6 +562,7 @@ jobs:
 
           | Method | Description | Status |
           |--------|-------------|--------|
+          | **Method 1** | helm-sigstore Plugin (Recommended) | ${{ steps.verify_helm_sigstore.outputs.status || '❌ Failed' }} |
           | **Method 2** | GPG Signature (Helm Native) | ${{ steps.verify_gpg.outputs.status || '❌ Failed' }} |
           | **Method 3** | Cosign Blob Signature | ${{ steps.verify_cosign_blob.outputs.status || '❌ Failed' }} |
           | **Method 4a** | OCI Chart Signature | ${{ steps.verify_oci_signature.outputs.status || '❌ Failed' }} |
@@ -568,6 +585,16 @@ jobs:
 
           <details>
           <summary>Click to expand verification commands</summary>
+
+          ### Method 1: helm-sigstore Plugin (Recommended)
+          \`\`\`bash
+          # Install the plugin
+          helm plugin install https://github.com/sigstore/helm-sigstore
+
+          # Download and verify the chart
+          wget ${RELEASE_URL}/nats-k8s-oidc-callout-${CHART_VERSION}.tgz
+          helm sigstore verify nats-k8s-oidc-callout-${CHART_VERSION}.tgz
+          \`\`\`
 
           ### Method 2: GPG Signature
           \`\`\`bash
