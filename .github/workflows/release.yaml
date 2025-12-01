@@ -217,9 +217,10 @@ jobs:
       - name: Package and sign Helm chart
         run: |
           # Package and sign with GPG (creates .prov file)
+          # Use substring of uid to identify the key (matches Name-Real)
           helm package helm/nats-k8s-oidc-callout -d . \
             --sign \
-            --key "${{ steps.gpg.outputs.key_id }}"
+            --key "NATS K8s OIDC Callout Release"
 
           CHART_VERSION="${{ steps.calver.outputs.tag }}"
           CHART_VERSION="${CHART_VERSION#v}"
