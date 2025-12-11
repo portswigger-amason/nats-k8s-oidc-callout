@@ -16,7 +16,7 @@ import (
 
 	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/auth"
 	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/config"
-	httpserver "github.com/portswigger-tim/nats-k8s-oidc-callout/internal/http"
+	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/httpserver"
 	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/jwt"
 	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/k8s"
 	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/nats"

@@ -40,7 +40,7 @@ Go-based NATS auth callout service for Kubernetes service account JWT validation
 ```
 cmd/server/          - Entry point
 internal/config/     - Environment config
-internal/http/       - Health & metrics
+internal/httpserver/ - Health & metrics
 internal/jwt/        - JWT validation
 internal/k8s/        - ServiceAccount cache
 internal/auth/       - Authorization logic

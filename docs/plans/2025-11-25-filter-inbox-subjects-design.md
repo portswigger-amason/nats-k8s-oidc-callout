@@ -139,7 +139,7 @@ func buildPermissions(sa *corev1.ServiceAccount, logger *zap.Logger) *Permission
   - `annotation` - Which annotation (pub/sub)
   - `pattern` - The filtered pattern prefix (`_INBOX` or `_REPLY`)
 
-**Implementation in internal/http/metrics.go:**
+**Implementation in internal/httpserver/metrics.go:**
 
 ```go
 var (
@@ -243,7 +243,7 @@ annotations:
 
 ### Phase 1: Core Changes
 1. Update `parseSubjects()` signature and implementation
-2. Add metrics counter to `internal/http/metrics.go`
+2. Add metrics counter to `internal/httpserver/metrics.go`
 3. Update `buildPermissions()` to log warnings and increment metrics
 4. Pass logger and metrics to Cache/buildPermissions
 

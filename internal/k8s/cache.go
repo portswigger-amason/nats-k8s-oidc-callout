@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	httpmetrics "github.com/portswigger-tim/nats-k8s-oidc-callout/internal/http"
+	httpmetrics "github.com/portswigger-tim/nats-k8s-oidc-callout/internal/httpserver"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 )
