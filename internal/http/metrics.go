@@ -1,5 +1,5 @@
-// Package http provides HTTP server with health and metrics endpoints.
-package http
+// Package httpserver provides HTTP server with health and metrics endpoints.
+package httpserver
 
 import (
 	"strings"
