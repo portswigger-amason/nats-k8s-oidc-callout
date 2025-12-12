@@ -29,7 +29,7 @@ helm install nats nats/nats \
 
 ```bash
 # Create operator and accounts
-nsc add operator --name MyOperator
+nsc add operator --name auth-operator
 nsc add account --name AUTH_SERVICE
 nsc add user --account AUTH_SERVICE --name auth-service
 nsc add account --name AUTH_ACCOUNT
