@@ -317,9 +317,11 @@ Apply:
 kubectl apply -f client-sa.yaml
 ```
 
-## Integration with NACK (JetStream Controller)
+## Integration with NACK (JetStream Controller) - Optional
 
-[NACK](https://github.com/nats-io/nack) is a Kubernetes operator that manages NATS JetStream resources (Streams, Consumers, KeyValue stores) through Custom Resource Definitions. NACK and nats-k8s-oidc-callout are **complementary** and work together seamlessly.
+**Note:** This section is **optional**. NACK is only needed if you want to manage JetStream resources (Streams, Consumers, KeyValue stores) declaratively via Kubernetes CRDs. If you plan to manage JetStream resources programmatically or via the NATS CLI, you can skip this section.
+
+[NACK](https://github.com/nats-io/nack) is a Kubernetes operator that manages NATS JetStream resources through Custom Resource Definitions. NACK and nats-k8s-oidc-callout are **complementary** and work together seamlessly.
 
 ### Architecture Overview
 
@@ -340,13 +342,134 @@ kubectl apply -f client-sa.yaml
 - **nats-k8s-oidc-callout** validates client applications using service account JWTs
 - Both can run simultaneously with **zero conflicts**
 
+### Understanding NATS Operators and Accounts
+
+**TL;DR:**
+- ✅ **NACK integration is OPTIONAL** - only needed for declarative JetStream management
+- ✅ Use **ONE operator** for your deployment (simplest model)
+- ✅ Create **THREE or FOUR accounts**: SYS (system), AUTH_SERVICE (callout), AUTH_ACCOUNT (clients), and optionally NACK (jetstream mgmt)
+- ✅ **SYS is an account** (not a user) - it's the system account for NATS internals
+- ✅ **NACK is NOT a system component** - it's a regular app that manages JetStream
+- ✅ All accounts are signed by the same operator, providing security isolation
+- 🔐 **JWTs are secrets** - never commit to git, use helm-secrets or secret managers
+
+#### Operator and Account Hierarchy
+
+NATS uses a **hierarchical JWT-based authentication model**:
+
+```
+Operator (Security Domain)
+├── SYS Account (System Operations)
+│   └── sys-user (User)
+├── AUTH_SERVICE Account (Auth Callout Service)
+│   └── auth-service (User)
+├── AUTH_ACCOUNT Account (Validated Clients)
+│   └── (Users assigned dynamically via auth callout)
+└── NACK Account (JetStream Management)
+    └── nack-controller (User)
+```
+
+**Key Concepts:**
+
+- **Operator**: Top-level entity representing a security domain; signs and manages accounts
+- **Account**: Security boundary for a group of users; defines resource limits and permissions
+- **User**: Individual identity within an account; has specific publish/subscribe permissions
+
+**Why One Operator?**
+
+Use a **single operator** for your deployment because:
+- ✅ Simplest deployment model (NATS best practice: pick the simplest model that works)
+- ✅ Single security domain (same organization/cluster)
+- ✅ Easier to manage and maintain
+- ✅ Accounts provide sufficient isolation between NACK and auth callout
+
+**When to use multiple operators:** Only when you have separate security domains (different organizations, business units, or multi-tenancy requirements).
+
+#### Account Roles Explained
+
+| Account | Purpose | Type | Users |
+|---------|---------|------|-------|
+| **SYS** | NATS system operations, monitoring, server-to-server communication | System Account | sys-user (system admin) |
+| **AUTH_SERVICE** | Auth callout service connects here to handle auth requests | Application Account | auth-service (callout service) |
+| **AUTH_ACCOUNT** | Validated application clients are assigned here | Application Account | (assigned dynamically) |
+| **NACK** | NACK controller manages JetStream resources | Application Account | nack-controller (NACK app) |
+
+**Important Notes:**
+- **SYS is a system account**, not a system user - it's for NATS server internals
+- **NACK is NOT a system component** - it's a regular application that happens to manage infrastructure
+- Each account provides security isolation and separate permission boundaries
+
 ### Setting Up NACK with NSC
 
-#### 1. Create NACK Account and User
+#### 0. Initialize NSC Environment
+
+Before creating accounts, initialize NSC and create the operator:
 
 ```bash
-# Create NACK account with JetStream permissions
+# Install NSC (if not already installed)
+# macOS
+brew install nsc
+
+# Linux
+curl -L https://github.com/nats-io/nsc/releases/latest/download/nsc-linux-amd64.zip -o nsc.zip
+unzip nsc.zip && sudo mv nsc /usr/local/bin/ && chmod +x /usr/local/bin/nsc
+
+# Verify installation
+nsc --version
+
+# Initialize NSC environment (creates ~/.nsc directory)
+nsc env
+
+# Create operator (represents your NATS deployment/security domain)
+nsc add operator nats-system
+
+# Verify operator was created
+nsc list operators
+# Output: nats-system
+```
+
+**NSC Store Location:** By default, NSC stores all JWTs in `~/.nsc/nats/nats-system/`
+
+#### 1. Create All Accounts and Users
+
+Create accounts for each component in your deployment:
+
+```bash
+# ============================================
+# SYS Account (System Operations)
+# ============================================
+nsc add account SYS
+nsc edit account SYS --sk system  # Mark as system account
+nsc add user --account SYS sys-user
+nsc generate creds --account SYS --name sys-user > sys-user.creds
+
+# ============================================
+# AUTH_SERVICE Account (Auth Callout Service)
+# ============================================
+nsc add account AUTH_SERVICE
+nsc add user --account AUTH_SERVICE auth-service
+
+# Set permissions for auth callout
+nsc edit user --account AUTH_SERVICE auth-service \
+  --allow-pub '$SYS.REQ.USER.AUTH' \
+  --allow-sub '_INBOX.>'
+
+nsc generate creds --account AUTH_SERVICE --name auth-service > auth-service.creds
+
+# ============================================
+# AUTH_ACCOUNT Account (Validated Clients)
+# ============================================
+nsc add account AUTH_ACCOUNT
+# Note: No users created here - clients are assigned dynamically by auth callout
+
+# ============================================
+# NACK Account (JetStream Management) - OPTIONAL
+# ============================================
+# Only create this if you plan to use NACK for declarative JetStream management
+
 nsc add account NACK
+
+# Set JetStream resource limits (unlimited)
 nsc edit account NACK \
   --js-mem-storage -1 \
   --js-disk-storage -1 \
@@ -363,38 +486,119 @@ nsc edit user --account NACK nack-controller \
   --allow-sub '$JS.>' \
   --allow-sub '_INBOX.>'
 
-# Generate credentials file
 nsc generate creds --account NACK --name nack-controller > nack-controller.creds
 
-# View account configuration
+# ============================================
+# Verify All Accounts
+# ============================================
+nsc list accounts
+# Output:
+# ┌──────────────┬─────────────────────────────────────┐
+# │ Account      │ Description                         │
+# ├──────────────┼─────────────────────────────────────┤
+# │ SYS          │                                     │
+# │ AUTH_SERVICE │                                     │
+# │ AUTH_ACCOUNT │                                     │
+# │ NACK         │                                     │
+# └──────────────┴─────────────────────────────────────┘
+
+# View detailed account information
+nsc describe account SYS
+nsc describe account AUTH_SERVICE
+nsc describe account AUTH_ACCOUNT
 nsc describe account NACK
 ```
 
 #### 2. Export JWTs for NATS Server
 
+Export all JWTs needed by the NATS server:
+
 ```bash
 # Create JWT directory
 mkdir -p /tmp/nats-jwt
 
-# Export operator JWT
+# Export operator JWT (used by NATS server)
 nsc describe operator --json | jq -r .jwt > /tmp/nats-jwt/operator.jwt
 
-# Export account JWTs
-nsc describe account NACK --json | jq -r .jwt > /tmp/nats-jwt/NACK.jwt
+# Export all account JWTs (used by JWT resolver)
+nsc describe account SYS --json | jq -r .jwt > /tmp/nats-jwt/SYS.jwt
 nsc describe account AUTH_SERVICE --json | jq -r .jwt > /tmp/nats-jwt/AUTH_SERVICE.jwt
 nsc describe account AUTH_ACCOUNT --json | jq -r .jwt > /tmp/nats-jwt/AUTH_ACCOUNT.jwt
 
-# Get public keys for configuration
-echo "NACK Account Public Key:"
+# Export NACK account JWT (only if you created the NACK account)
+nsc describe account NACK --json | jq -r .jwt > /tmp/nats-jwt/NACK.jwt
+
+# Get public keys for NATS server configuration
+echo "=== Account Public Keys ==="
+echo "SYS Account:"
+nsc describe account SYS --json | jq -r .sub
+
+echo "AUTH_SERVICE Account:"
+nsc describe account AUTH_SERVICE --json | jq -r .sub
+
+echo "AUTH_ACCOUNT Account:"
+nsc describe account AUTH_ACCOUNT --json | jq -r .sub
+
+echo "NACK Account:"
 nsc describe account NACK --json | jq -r .sub
 
-echo "AUTH_SERVICE Account Public Key:"
-nsc describe account AUTH_SERVICE --json | jq -r .sub
+echo ""
+echo "=== User Public Keys ==="
+echo "auth-service User:"
+nsc describe user --account AUTH_SERVICE auth-service --json | jq -r .sub
 ```
 
-#### 3. Configure NATS Server for Both NACK and Auth Callout
+**🔐 Security Warning: JWTs Are Secrets**
 
-Update NATS Helm values to support operator mode with multiple accounts:
+JWTs contain sensitive cryptographic material and **MUST be treated as secrets**:
+- ❌ **NEVER** commit JWTs to git repositories
+- ❌ **NEVER** store JWTs in plain text in Helm values files
+- ✅ Use Kubernetes Secrets to store JWTs
+- ✅ Use [helm-secrets](https://github.com/jkroepke/helm-secrets) to encrypt sensitive Helm values
+- ✅ Use [sealed-secrets](https://github.com/bitnami-labs/sealed-secrets) or external secret managers (AWS Secrets Manager, Vault, etc.)
+- ✅ Enable RBAC to restrict access to secrets
+- ✅ Rotate JWTs periodically
+
+**Recommended: Using helm-secrets**
+
+```bash
+# Install helm-secrets plugin
+helm plugin install https://github.com/jkroepke/helm-secrets
+
+# Create encrypted values file
+cat > secrets.yaml <<EOF
+config:
+  merge:
+    authorization:
+      auth_callout:
+        issuer: "UABC123XYZ..."
+        auth_users: ["auth-service"]
+
+configMap:
+  operator:
+    operator.jwt: |
+      <operator JWT>
+  jwt:
+    SYS.jwt: |
+      <SYS account JWT>
+    AUTH_SERVICE.jwt: |
+      <AUTH_SERVICE account JWT>
+    # ... other JWTs
+EOF
+
+# Encrypt the file
+helm secrets enc secrets.yaml
+
+# Use encrypted values in deployment
+helm secrets upgrade nats nats/nats \
+  --namespace nats \
+  -f values.yaml \
+  -f secrets.yaml
+```
+
+#### 3. Configure NATS Server for All Accounts
+
+Update NATS Helm values to support operator mode with all accounts:
 
 ```yaml
 # nats-values-with-nack.yaml
@@ -408,7 +612,7 @@ config:
   resolver:
     enabled: true
     operator: /etc/nats-config/operator/operator.jwt
-    systemAccount: AUTH_SERVICE
+    systemAccount: SYS  # Use SYS account for system operations
     store:
       dir: /etc/nats-config/jwt
       size: 10Mi
@@ -417,8 +621,11 @@ config:
   merge:
     authorization:
       auth_callout:
-        issuer: "UAABC...XYZ"  # auth-service user public key from step 2
+        # User public key that handles auth requests (from step 2)
+        issuer: "UABC123XYZ..."  # auth-service user public key
+        # Username from AUTH_SERVICE account
         auth_users: ["auth-service"]
+        # Account where auth service connects
         account: "AUTH_SERVICE"
 
 # Mount operator and account JWTs
@@ -430,32 +637,56 @@ configMap:
       -----END NATS OPERATOR JWT-----
 
   jwt:
-    NACK.jwt: |
-      <paste NACK account JWT>
+    SYS.jwt: |
+      <paste SYS account JWT from /tmp/nats-jwt/SYS.jwt>
     AUTH_SERVICE.jwt: |
       <paste AUTH_SERVICE account JWT>
     AUTH_ACCOUNT.jwt: |
       <paste AUTH_ACCOUNT account JWT>
+    # NACK.jwt - Only include if using NACK
+    # NACK.jwt: |
+    #   <paste NACK account JWT>
 ```
+
+**Important:** Store these JWTs securely using helm-secrets, sealed-secrets, or an external secret manager. See the security warning above for details.
+
+**Account Configuration Summary:**
+
+| Account | Used By | System Account? | JetStream? | Required? |
+|---------|---------|-----------------|------------|-----------|
+| **SYS** | NATS server internals | ✅ Yes | Optional | ✅ Required |
+| **AUTH_SERVICE** | nats-k8s-oidc-callout | ❌ No | Optional | ✅ Required |
+| **AUTH_ACCOUNT** | Validated application clients | ❌ No | ✅ Yes | ✅ Required |
+| **NACK** | NACK controller | ❌ No | ✅ Yes | ⚠️ Optional |
 
 Apply the configuration:
 
 ```bash
-# Create ConfigMaps
+# Create ConfigMaps with required account JWTs
 kubectl create configmap nats-jwt \
   --namespace nats \
-  --from-file=/tmp/nats-jwt/NACK.jwt \
+  --from-file=/tmp/nats-jwt/SYS.jwt \
   --from-file=/tmp/nats-jwt/AUTH_SERVICE.jwt \
   --from-file=/tmp/nats-jwt/AUTH_ACCOUNT.jwt
+  # Add NACK JWT if using NACK:
+  # --from-file=/tmp/nats-jwt/NACK.jwt
 
 kubectl create configmap nats-operator \
   --namespace nats \
   --from-file=/tmp/nats-jwt/operator.jwt
 
-# Upgrade NATS
+# Upgrade NATS with new configuration
 helm upgrade nats nats/nats \
   --namespace nats \
   --values nats-values-with-nack.yaml
+
+# Verify NATS server configuration
+kubectl logs -n nats nats-0 | grep -E "operator|resolver|system|account"
+# Expected output should show:
+# - Operator JWT loaded
+# - System account: SYS
+# - Resolver directory configured
+# - Authorization callout enabled
 ```
 
 #### 4. Deploy NACK Controller
@@ -582,6 +813,70 @@ nats --server=nats://nats.nats.svc.cluster.local:4222 \
 3. **Credential Rotation**: Regularly rotate NACK credentials
 4. **Monitoring**: Track both NACK operations and auth callout metrics
 5. **Resource Naming**: Use clear namespaces for NACK-managed resources
+6. **System Account**: Always use SYS as the system account, not application accounts
+7. **Operator Management**: Keep operator private keys secure; use signing keys for production
+
+### Common NSC Troubleshooting
+
+#### Error: "set an operator"
+
+```bash
+# Problem: No operator created yet
+nsc describe operator --json
+
+# Solution: Create operator first
+nsc add operator MyCluster
+```
+
+#### Error: Account or user not found
+
+```bash
+# List all accounts
+nsc list accounts
+
+# List users in an account
+nsc list users --account NACK
+
+# If missing, recreate
+nsc add account NACK
+nsc add user --account NACK nack-controller
+```
+
+#### Credential file issues
+
+```bash
+# Regenerate credentials
+nsc generate creds --account NACK --name nack-controller > nack-controller.creds
+
+# Verify credentials file format (should have JWT + NKey seed)
+cat nack-controller.creds | head -20
+
+# Test credentials with NATS CLI
+nats --creds=nack-controller.creds server check
+```
+
+#### Wrong system account configured
+
+```bash
+# Verify which account is marked as system account
+nsc describe account SYS | grep "Signing Keys"
+
+# If not marked, add system flag
+nsc edit account SYS --sk system
+```
+
+#### JWT resolver not finding accounts
+
+```bash
+# Verify JWT files exist
+ls -la /tmp/nats-jwt/
+
+# Check JWT file contents are valid
+cat /tmp/nats-jwt/NACK.jwt | head -1
+
+# Re-export if needed
+nsc describe account NACK --json | jq -r .jwt > /tmp/nats-jwt/NACK.jwt
+```
 
 ## Verification
 
