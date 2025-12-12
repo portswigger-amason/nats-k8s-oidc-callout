@@ -317,6 +317,272 @@ Apply:
 kubectl apply -f client-sa.yaml
 ```
 
+## Integration with NACK (JetStream Controller)
+
+[NACK](https://github.com/nats-io/nack) is a Kubernetes operator that manages NATS JetStream resources (Streams, Consumers, KeyValue stores) through Custom Resource Definitions. NACK and nats-k8s-oidc-callout are **complementary** and work together seamlessly.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────┐
+│ NATS Server                                 │
+│ ├─ Account: NACK (NACK's credentials)      │
+│ ├─ Account: DEFAULT (auth callout enabled) │
+└─────────────────────────────────────────────┘
+         ↑                    ↑
+         │                    │
+    NACK Controller      Your Applications
+    (uses JWT creds)     (use K8s SA JWTs + callout)
+```
+
+**Key Points:**
+- **NACK** manages JetStream infrastructure using its own account credentials
+- **nats-k8s-oidc-callout** validates client applications using service account JWTs
+- Both can run simultaneously with **zero conflicts**
+
+### Setting Up NACK with NSC
+
+#### 1. Create NACK Account and User
+
+```bash
+# Create NACK account with JetStream permissions
+nsc add account NACK
+nsc edit account NACK \
+  --js-mem-storage -1 \
+  --js-disk-storage -1 \
+  --js-streams -1 \
+  --js-consumer -1
+
+# Create user for NACK controller
+nsc add user --account NACK nack-controller
+
+# Grant JetStream management permissions
+nsc edit user --account NACK nack-controller \
+  --allow-pub '$JS.>' \
+  --allow-pub '_INBOX.>' \
+  --allow-sub '$JS.>' \
+  --allow-sub '_INBOX.>'
+
+# Generate credentials file
+nsc generate creds --account NACK --name nack-controller > nack-controller.creds
+
+# View account configuration
+nsc describe account NACK
+```
+
+#### 2. Export JWTs for NATS Server
+
+```bash
+# Create JWT directory
+mkdir -p /tmp/nats-jwt
+
+# Export operator JWT
+nsc describe operator --json | jq -r .jwt > /tmp/nats-jwt/operator.jwt
+
+# Export account JWTs
+nsc describe account NACK --json | jq -r .jwt > /tmp/nats-jwt/NACK.jwt
+nsc describe account AUTH_SERVICE --json | jq -r .jwt > /tmp/nats-jwt/AUTH_SERVICE.jwt
+nsc describe account AUTH_ACCOUNT --json | jq -r .jwt > /tmp/nats-jwt/AUTH_ACCOUNT.jwt
+
+# Get public keys for configuration
+echo "NACK Account Public Key:"
+nsc describe account NACK --json | jq -r .sub
+
+echo "AUTH_SERVICE Account Public Key:"
+nsc describe account AUTH_SERVICE --json | jq -r .sub
+```
+
+#### 3. Configure NATS Server for Both NACK and Auth Callout
+
+Update NATS Helm values to support operator mode with multiple accounts:
+
+```yaml
+# nats-values-with-nack.yaml
+config:
+  cluster:
+    enabled: true
+  jetstream:
+    enabled: true
+
+  # Operator mode with JWT resolver
+  resolver:
+    enabled: true
+    operator: /etc/nats-config/operator/operator.jwt
+    systemAccount: AUTH_SERVICE
+    store:
+      dir: /etc/nats-config/jwt
+      size: 10Mi
+
+  # Authorization callout configuration
+  merge:
+    authorization:
+      auth_callout:
+        issuer: "UAABC...XYZ"  # auth-service user public key from step 2
+        auth_users: ["auth-service"]
+        account: "AUTH_SERVICE"
+
+# Mount operator and account JWTs
+configMap:
+  operator:
+    operator.jwt: |
+      -----BEGIN NATS OPERATOR JWT-----
+      <paste operator JWT from /tmp/nats-jwt/operator.jwt>
+      -----END NATS OPERATOR JWT-----
+
+  jwt:
+    NACK.jwt: |
+      <paste NACK account JWT>
+    AUTH_SERVICE.jwt: |
+      <paste AUTH_SERVICE account JWT>
+    AUTH_ACCOUNT.jwt: |
+      <paste AUTH_ACCOUNT account JWT>
+```
+
+Apply the configuration:
+
+```bash
+# Create ConfigMaps
+kubectl create configmap nats-jwt \
+  --namespace nats \
+  --from-file=/tmp/nats-jwt/NACK.jwt \
+  --from-file=/tmp/nats-jwt/AUTH_SERVICE.jwt \
+  --from-file=/tmp/nats-jwt/AUTH_ACCOUNT.jwt
+
+kubectl create configmap nats-operator \
+  --namespace nats \
+  --from-file=/tmp/nats-jwt/operator.jwt
+
+# Upgrade NATS
+helm upgrade nats nats/nats \
+  --namespace nats \
+  --values nats-values-with-nack.yaml
+```
+
+#### 4. Deploy NACK Controller
+
+```bash
+# Add NACK Helm repository
+helm repo add nack https://nats-io.github.io/k8s/helm/charts/
+helm repo update
+
+# Create namespace
+kubectl create namespace nack-system
+
+# Create secret with NACK credentials
+kubectl create secret generic nack-nats-creds \
+  --namespace nack-system \
+  --from-file=nack.creds=./nack-controller.creds
+
+# Install NACK
+helm install nack nack/nack \
+  --namespace nack-system \
+  --set jetstream.nats.url=nats://nats.nats.svc.cluster.local:4222 \
+  --set jetstream.nats.credentialsSecret=nack-nats-creds
+```
+
+#### 5. Create NACK Account CRD (Alternative Configuration)
+
+If you want to manage NACK connections via Account CRDs:
+
+```yaml
+# nack-account.yaml
+apiVersion: jetstream.nats.io/v1beta2
+kind: Account
+metadata:
+  name: nack-account
+  namespace: nack-system
+spec:
+  servers:
+    - "nats://nats.nats.svc.cluster.local:4222"
+  creds:
+    secret:
+      name: nack-nats-creds
+      key: nack.creds
+```
+
+Apply:
+```bash
+kubectl apply -f nack-account.yaml
+```
+
+#### 6. Create JetStream Resources
+
+Now you can create Streams and Consumers using NACK:
+
+```yaml
+# example-stream.yaml
+apiVersion: jetstream.nats.io/v1beta2
+kind: Stream
+metadata:
+  name: events
+  namespace: default
+spec:
+  name: events
+  subjects:
+    - "events.>"
+  storage: file
+  replicas: 3
+  maxAge: 24h
+  # Optional: reference specific account
+  # account: nack-account
+---
+apiVersion: jetstream.nats.io/v1beta2
+kind: Consumer
+metadata:
+  name: events-processor
+  namespace: default
+spec:
+  streamName: events
+  durableName: processor
+  deliverPolicy: all
+  ackPolicy: explicit
+  ackWait: 30s
+  maxDeliver: 5
+```
+
+Apply:
+```bash
+kubectl apply -f example-stream.yaml
+```
+
+### Verification
+
+```bash
+# Check NACK controller
+kubectl get pods -n nack-system
+kubectl logs -n nack-system -l app=nack
+
+# Verify JetStream resources
+kubectl get streams,consumers -A
+
+# Test with NATS CLI (using service account token)
+kubectl create token my-nats-client \
+  --namespace=my-app \
+  --audience=nats > test-token.txt
+
+nats --server=nats://nats.nats.svc.cluster.local:4222 \
+  --token=$(cat test-token.txt) \
+  stream info events
+```
+
+### Comparison: NACK vs. Auth Callout
+
+| Feature | NACK | nats-k8s-oidc-callout |
+|---------|------|------------------------|
+| **Purpose** | Manage JetStream resources | Authenticate client applications |
+| **Scope** | Infrastructure management | Authorization enforcement |
+| **Authentication** | Uses dedicated account credentials | Validates Kubernetes service account JWTs |
+| **Resources Managed** | Streams, Consumers, KeyValue, ObjectStore | Client permissions |
+| **Conflict with Auth Callout?** | ✅ No - Complementary | N/A |
+
+### Best Practices
+
+1. **Separate Accounts**: Use dedicated NACK account for infrastructure management
+2. **Least Privilege**: Grant NACK only JetStream management permissions
+3. **Credential Rotation**: Regularly rotate NACK credentials
+4. **Monitoring**: Track both NACK operations and auth callout metrics
+5. **Resource Naming**: Use clear namespaces for NACK-managed resources
+
 ## Verification
 
 ### Check Deployment
