@@ -123,8 +123,8 @@ nsc describe account NACK --json | jq -r .sub
 Add the NACK account JWT to your NATS server configuration:
 
 ```bash
-# Create/update ConfigMap with NACK JWT
-kubectl create configmap nats-jwt \
+# Create/update Secret with NACK JWT
+kubectl create secret generic nats-jwt \
   --namespace nats-system \
   --from-file=SYS.jwt \
   --from-file=AUTH_SERVICE.jwt \
@@ -332,7 +332,7 @@ nsc edit user --account NACK nack-controller \
 
 # Push updated JWT to NATS
 nsc describe account NACK --json | jq -r .jwt > nack-account.jwt
-kubectl create configmap nats-jwt --from-file=NACK.jwt=nack-account.jwt \
+kubectl create secret generic nats-jwt --from-file=NACK.jwt=nack-account.jwt \
   -n nats-system --dry-run=client -o yaml | kubectl apply -f -
 kubectl rollout restart statefulset/nats -n nats-system
 ```

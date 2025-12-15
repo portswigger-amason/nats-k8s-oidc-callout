@@ -97,15 +97,17 @@ config:
         account: "AUTH_SERVICE"
 ```
 
-Create ConfigMaps and upgrade NATS:
+Create Secrets and upgrade NATS:
 
 ```bash
-# Create ConfigMaps with JWTs
-kubectl create configmap nats-operator \
+# Create Secrets with JWTs
+# Note: Account JWTs are public information (contain public keys), but we use
+# Secrets for consistency with credential storage best practices
+kubectl create secret generic nats-operator \
   --namespace nats-system \
   --from-file=operator.jwt=/tmp/nats-jwt/operator.jwt
 
-kubectl create configmap nats-jwt \
+kubectl create secret generic nats-jwt \
   --namespace nats-system \
   --from-file=SYS.jwt=/tmp/nats-jwt/SYS.jwt \
   --from-file=AUTH_SERVICE.jwt=/tmp/nats-jwt/AUTH_SERVICE.jwt \
