@@ -11,6 +11,7 @@ env:
   GO_VERSION: '1.25.5'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  HELM_VERSION: 'v3.18.0'
 
 permissions:
   contents: write
@@ -43,6 +44,7 @@ jobs:
       - name: Setup Helm
         uses: mamezou-tech/setup-helmfile@v2.1.0
         with:
+          helm-version: ${{ env.HELM_VERSION }}
           install-helm-plugins: no
           install-kubectl: no
           additional-helm-plugins: https://github.com/helm-unittest/helm-unittest
