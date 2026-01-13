@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Safer Runner (audit mode)
-        uses: portswigger-tim/safer-runner-action@v1.1.2
+        uses: portswigger-tim/safer-runner-action@v1.2.2
         with:
           mode: analyze
 
@@ -42,7 +42,7 @@ jobs:
           cache: true
 
       - name: Setup Helm
-        uses: mamezou-tech/setup-helmfile@v2.1.0
+        uses: mamezou-tech/setup-helmfile@v2.2.0
         with:
           helm-version: ${{ env.HELM_VERSION }}
           install-helm-plugins: no
