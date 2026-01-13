@@ -31,7 +31,7 @@ jobs:
           cache: true
 
       - name: Setup Helm
-        uses: mamezou-tech/setup-helmfile@v2.1.0
+        uses: mamezou-tech/setup-helmfile@v2.2.0
         with:
           install-kubectl: no
           additional-helm-plugins: https://github.com/helm-unittest/helm-unittest
