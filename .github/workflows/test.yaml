@@ -7,6 +7,7 @@ on:
 
 env:
   GO_VERSION: '1.25.5'
+  HELM_VERSION: 'v3.18.0'
 
 permissions:
   contents: read
@@ -33,6 +34,7 @@ jobs:
       - name: Setup Helm
         uses: mamezou-tech/setup-helmfile@v2.2.0
         with:
+          helm-version: ${{ env.HELM_VERSION }}
           install-kubectl: no
           additional-helm-plugins: https://github.com/helm-unittest/helm-unittest
 
