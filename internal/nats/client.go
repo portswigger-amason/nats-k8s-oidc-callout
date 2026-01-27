@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/auth"
+	"github.com/portswigger-tim/nats-k8s-oidc-callout/internal/logging"
 )
 
 const (
@@ -365,8 +366,8 @@ func isSeedSectionEnd(line string) bool {
 // The token should be provided by the client in the connection options
 func (c *Client) extractToken(req *jwt.AuthorizationRequest) string {
 	c.logger.Debug("extracting token from auth request",
-		zap.String("jwt_field", req.ConnectOptions.JWT),
-		zap.String("token_field", req.ConnectOptions.Token),
+		zap.String("jwt_field", logging.RedactJWT(req.ConnectOptions.JWT)),
+		zap.String("token_field", logging.RedactJWT(req.ConnectOptions.Token)),
 		zap.String("username", req.ConnectOptions.Username))
 
 	// Check for JWT in connect options (standard field)
